@@ -1,7 +1,7 @@
 import * as grpcWeb from 'grpc-web';
 import {GetVersionClient, PriceClient, WalletsClient, OffersClient, PaymentAccountsClient, TradesClient} from './protobuf/GrpcServiceClientPb';
-import {GetVersionRequest, GetVersionReply, MarketPriceRequest, MarketPriceReply, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest} from './protobuf/grpc_pb';
-import {PaymentAccount, AvailabilityResult} from './protobuf/pb_pb';
+import {GetVersionRequest, GetVersionReply, MarketPriceRequest, MarketPriceReply, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest, MarketPricesRequest} from './protobuf/grpc_pb';
+import {PaymentAccount, AvailabilityResult, MarketPrice} from './protobuf/pb_pb';
 
 /**
  * Haveno daemon client using gRPC.
@@ -51,11 +51,12 @@ class HavenoDaemon {
   }
   
   /**
-   * Get the current market price of the given currency code as a ratio, e.g. ETH/XMR.
+   * Get the current market price per 1 XMR in the given currency
    * 
-   * @param {string} currencyCode - currency code to get the price of
-   * @return {number} the current market price of the given currency code as a ratio, e.g. XMR/ETH
+   * @param {string} currencyCode - currency code (fiat or crypto) to get the price of
+   * @return {number} the current market price per 1 XMR in the given currency
    */
+
   async getPrice(currencyCode: string): Promise<number> {
     let that = this;
     return new Promise(function(resolve, reject) {
@@ -65,7 +66,22 @@ class HavenoDaemon {
       });
     });
   }
-  
+
+  /**
+   * Get the current market prices of all the currencies
+   * 
+   * @return {MarketPrice[]} Price per 1 XMR in all supported currencies (fiat & crypto)
+   */
+  async getPrices(): Promise<MarketPrice[]> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._priceClient.getMarketPrices(new MarketPricesRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: MarketPricesReply) {
+        if (err) reject(err);
+        else resolve(response.getMarketPriceList());
+      });
+    });
+  }
+
   /**
    * Get the user's balances.
    * 
