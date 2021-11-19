@@ -50,11 +50,11 @@ const WALLET_SYNC_PERIOD = 5000;
 const MAX_TIME_PEER_NOTICE = 3000;
 const TEST_CRYPTO_ACCOUNTS = [ // TODO (woodser): test other cryptos, fiat
   {
-    currencyCode: "eth",
+    currencyCode: "ETH",
     address: "0xdBdAb835Acd6fC84cF5F9aDD3c0B5a1E25fbd99f"
   },
   {
-    currencyCode: "btc",
+    currencyCode: "BTC",
     address: "bcrt1q6j90vywv8x7eyevcnn2tn2wrlg3vsjlsvt46qz"
   }
 ];
@@ -92,14 +92,42 @@ test("Can get market prices", async () => {
     let price = await alice.getPrice(testAccount.currencyCode);
     console.log(testAccount.currencyCode + " price: " + price);
     expect(price).toBeGreaterThan(0);
-    await GenUtils.waitFor(1000); // wait before next request // TODO (woodser): disable price throttle?
   }
     
   // test fiat price
-  let price = await alice.getPrice("USD");
-  console.log("usd price: " + price);
-  expect(price).toBeGreaterThan(0);
+  let usd = await alice.getPrice("USD");
+  console.log("USD price: " + usd);
+  // make sure the values are not completely off
+  expect(usd).toBeGreaterThan(50)
+  expect(usd).toBeLessThan(5000); 
+
+  let doge = await alice.getPrice("DOGE");
+  console.log("DOGE price: " + doge);
+  expect(doge).toBeGreaterThan(200)
+  expect(doge).toBeLessThan(20000);
+
+  let btc = await alice.getPrice("BTC");
+  console.log("BTC price: " + btc);
+  expect(btc).toBeGreaterThan(0.0004)
+  expect(btc).toBeLessThan(0.4);
+
+
+  await expect(async () => {await alice.getPrice("INVALID_CURRENCY")})
+    .rejects
+    .toThrow('Currency not found: INVALID_CURRENCY');
+
 });
+
+test("Can get all market prices", async () => {
+  let prices = await alice.getPrices();
+  expect(prices.length).toBeGreaterThan(1);
+  for (let price of prices) {
+      expect(price.getCurrencyCode().length).toBeGreaterThan(0);
+      expect(price.getPrice()).toBeGreaterThanOrEqual(0);
+      console.log(price.getCurrencyCode() + " price: " + price.getPrice());
+  }
+});
+
 
 test("Can get balances", async () => {
   let balances: XmrBalanceInfo = await alice.getBalances();
