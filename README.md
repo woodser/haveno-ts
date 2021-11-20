@@ -33,10 +33,13 @@ Running the [top-level API tests](./src/HavenoDaemon.test.tsx) is a great way to
 7. `npm test` to run all tests or `npm run test -- -t 'my test'` to run tests by name.
 
 
-## How to Update the Protobuf Client
+## Protobuf Client
 
-If the protobuf definitions in haveno-dex/haveno are updated, the typescript imports must be regenerated:
+Typescript imports are generated automatically from `.proto` files into the `./src/protobuf` directory when running `npm install` or `npm test`.
 
-1. Copy grpc.proto and pb.proto from Haveno's [protobuf definitions](https://github.com/haveno-dex/haveno/tree/master/proto/src/main/proto) to ./config.
-2. Install protobuf for your system, e.g. on mac: `brew install protobuf`
-3. `./bin/build_protobuf.sh`
+`.proto` files are taken from the **haveno-dex/haveno repository which has to be cloned in the same directory as this one**.
+E.g. `~/git/haveno` and `~/git/haveno-ui-poc`
+
+`protobuf` needs to be installed on your system
+- e.g. on mac: `brew install protobuf`
+- on debian linux: `apt install protobuf-compiler`
