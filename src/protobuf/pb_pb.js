@@ -2,11 +2,14 @@
 /**
  * @fileoverview
  * @enhanceable
+ * @suppress {missingRequire} reports error on implicit type usages.
  * @suppress {messageConventions} JS Compiler reports an error if a variable or
  *     field starts with 'MSG_' and isn't a translatable message.
  * @public
  */
 // GENERATED CODE -- DO NOT EDIT!
+/* eslint-disable */
+// @ts-nocheck
 
 var jspb = require('google-protobuf');
 var goog = jspb;
@@ -6995,8 +6998,10 @@ proto.io.bisq.protobuffer.PreliminaryGetDataRequest.deserializeBinaryFromReader 
       msg.addExcludedKeys(value);
       break;
     case 3:
-      var value = /** @type {!Array<number>} */ (reader.readPackedInt32());
-      msg.setSupportedCapabilitiesList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedInt32() : [reader.readInt32()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addSupportedCapabilities(values[i]);
+      }
       break;
     case 4:
       var value = /** @type {string} */ (reader.readString());
@@ -7292,8 +7297,10 @@ proto.io.bisq.protobuffer.GetDataResponse.deserializeBinaryFromReader = function
       msg.addDataSet(value);
       break;
     case 4:
-      var value = /** @type {!Array<number>} */ (reader.readPackedInt32());
-      msg.setSupportedCapabilitiesList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedInt32() : [reader.readInt32()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addSupportedCapabilities(values[i]);
+      }
       break;
     case 5:
       var value = new proto.io.bisq.protobuffer.PersistableNetworkPayload;
@@ -7899,8 +7906,10 @@ proto.io.bisq.protobuffer.GetPeersRequest.deserializeBinaryFromReader = function
       msg.setNonce(value);
       break;
     case 3:
-      var value = /** @type {!Array<number>} */ (reader.readPackedInt32());
-      msg.setSupportedCapabilitiesList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedInt32() : [reader.readInt32()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addSupportedCapabilities(values[i]);
+      }
       break;
     case 4:
       var value = new proto.io.bisq.protobuffer.Peer;
@@ -8188,8 +8197,10 @@ proto.io.bisq.protobuffer.GetPeersResponse.deserializeBinaryFromReader = functio
       msg.addReportedPeers(value);
       break;
     case 3:
-      var value = /** @type {!Array<number>} */ (reader.readPackedInt32());
-      msg.setSupportedCapabilitiesList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedInt32() : [reader.readInt32()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addSupportedCapabilities(values[i]);
+      }
       break;
     default:
       reader.skipField();
@@ -9747,8 +9758,10 @@ proto.io.bisq.protobuffer.OfferAvailabilityRequest.deserializeBinaryFromReader =
       msg.setTakersTradePrice(value);
       break;
     case 4:
-      var value = /** @type {!Array<number>} */ (reader.readPackedInt32());
-      msg.setSupportedCapabilitiesList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedInt32() : [reader.readInt32()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addSupportedCapabilities(values[i]);
+      }
       break;
     case 5:
       var value = /** @type {string} */ (reader.readString());
@@ -10119,8 +10132,10 @@ proto.io.bisq.protobuffer.OfferAvailabilityResponse.deserializeBinaryFromReader 
       msg.setAvailabilityResult(value);
       break;
     case 3:
-      var value = /** @type {!Array<number>} */ (reader.readPackedInt32());
-      msg.setSupportedCapabilitiesList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedInt32() : [reader.readInt32()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addSupportedCapabilities(values[i]);
+      }
       break;
     case 4:
       var value = /** @type {string} */ (reader.readString());
@@ -23642,8 +23657,10 @@ proto.io.bisq.protobuffer.Peer.deserializeBinaryFromReader = function(msg, reade
       msg.setDate(value);
       break;
     case 3:
-      var value = /** @type {!Array<number>} */ (reader.readPackedInt32());
-      msg.setSupportedCapabilitiesList(value);
+      var values = /** @type {!Array<number>} */ (reader.isDelimited() ? reader.readPackedInt32() : [reader.readInt32()]);
+      for (var i = 0; i < values.length; i++) {
+        msg.addSupportedCapabilities(values[i]);
+      }
       break;
     default:
       reader.skipField();

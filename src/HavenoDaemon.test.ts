@@ -2,7 +2,7 @@
     
 // import haveno types
 import {HavenoDaemon} from "./HavenoDaemon";
-import {XmrBalanceInfo, OfferInfo, TradeInfo} from './protobuf/grpc_pb'; // TODO (woodser): better names; haveno_grpc_pb, haveno_pb
+import {XmrBalanceInfo, OfferInfo, TradeInfo, MarketPriceInfo} from './protobuf/grpc_pb'; // TODO (woodser): better names; haveno_grpc_pb, haveno_pb
 import {PaymentAccount} from './protobuf/pb_pb';
 
 // import monero-javascript
@@ -87,47 +87,36 @@ test("Can get the version", async () => {
 
 test("Can get market prices", async () => {
   
-  // test crypto prices  
+  // get all market prices
+  let prices: MarketPriceInfo[] = await alice.getPrices();
+  expect(prices.length).toBeGreaterThan(1);
+  for (let price of prices) {
+    expect(price.getCurrencyCode().length).toBeGreaterThan(0);
+    expect(price.getPrice()).toBeGreaterThanOrEqual(0);
+  }
+  
+  // test crypto accounts  
   for (let testAccount of TEST_CRYPTO_ACCOUNTS) {
     let price = await alice.getPrice(testAccount.currencyCode);
-    console.log(testAccount.currencyCode + " price: " + price);
     expect(price).toBeGreaterThan(0);
   }
     
-  // test fiat price
+  // test that prices are reasonable
   let usd = await alice.getPrice("USD");
-  console.log("USD price: " + usd);
-  // make sure the values are not completely off
-  expect(usd).toBeGreaterThan(50)
-  expect(usd).toBeLessThan(5000); 
-
+  expect(usd).toBeGreaterThan(50);
+  expect(usd).toBeLessThan(5000);
   let doge = await alice.getPrice("DOGE");
-  console.log("DOGE price: " + doge);
   expect(doge).toBeGreaterThan(200)
   expect(doge).toBeLessThan(20000);
-
   let btc = await alice.getPrice("BTC");
-  console.log("BTC price: " + btc);
   expect(btc).toBeGreaterThan(0.0004)
   expect(btc).toBeLessThan(0.4);
 
-
+  // test invalid currency
   await expect(async () => {await alice.getPrice("INVALID_CURRENCY")})
     .rejects
     .toThrow('Currency not found: INVALID_CURRENCY');
-
 });
-
-test("Can get all market prices", async () => {
-  let prices = await alice.getPrices();
-  expect(prices.length).toBeGreaterThan(1);
-  for (let price of prices) {
-      expect(price.getCurrencyCode().length).toBeGreaterThan(0);
-      expect(price.getPrice()).toBeGreaterThanOrEqual(0);
-      console.log(price.getCurrencyCode() + " price: " + price.getPrice());
-  }
-});
-
 
 test("Can get balances", async () => {
   let balances: XmrBalanceInfo = await alice.getBalances();
