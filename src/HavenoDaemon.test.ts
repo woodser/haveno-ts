@@ -96,7 +96,7 @@ test("Can get market prices", async () => {
     expect(price.getPrice()).toBeGreaterThanOrEqual(0);
   }
   
-  // test crypto accounts  
+  // get market prices of specific currencies
   for (let testAccount of TEST_CRYPTO_ACCOUNTS) {
     let price = await alice.getPrice(testAccount.currencyCode);
     expect(price).toBeGreaterThan(0);
