@@ -742,10 +742,10 @@ export namespace MarketPricesRequest {
 }
 
 export class MarketPricesReply extends jspb.Message {
-  getMarketPriceList(): Array<MarketPrice>;
-  setMarketPriceList(value: Array<MarketPrice>): MarketPricesReply;
+  getMarketPriceList(): Array<MarketPriceInfo>;
+  setMarketPriceList(value: Array<MarketPriceInfo>): MarketPricesReply;
   clearMarketPriceList(): MarketPricesReply;
-  addMarketPrice(value?: MarketPrice, index?: number): MarketPrice;
+  addMarketPrice(value?: MarketPriceInfo, index?: number): MarketPriceInfo;
 
   serializeBinary(): Uint8Array;
   toObject(includeInstance?: boolean): MarketPricesReply.AsObject;
@@ -757,26 +757,26 @@ export class MarketPricesReply extends jspb.Message {
 
 export namespace MarketPricesReply {
   export type AsObject = {
-    marketPriceList: Array<MarketPrice.AsObject>,
+    marketPriceList: Array<MarketPriceInfo.AsObject>,
   }
 }
 
-export class MarketPrice extends jspb.Message {
+export class MarketPriceInfo extends jspb.Message {
   getCurrencyCode(): string;
-  setCurrencyCode(value: string): MarketPrice;
+  setCurrencyCode(value: string): MarketPriceInfo;
 
   getPrice(): number;
-  setPrice(value: number): MarketPrice;
+  setPrice(value: number): MarketPriceInfo;
 
   serializeBinary(): Uint8Array;
-  toObject(includeInstance?: boolean): MarketPrice.AsObject;
-  static toObject(includeInstance: boolean, msg: MarketPrice): MarketPrice.AsObject;
-  static serializeBinaryToWriter(message: MarketPrice, writer: jspb.BinaryWriter): void;
-  static deserializeBinary(bytes: Uint8Array): MarketPrice;
-  static deserializeBinaryFromReader(message: MarketPrice, reader: jspb.BinaryReader): MarketPrice;
+  toObject(includeInstance?: boolean): MarketPriceInfo.AsObject;
+  static toObject(includeInstance: boolean, msg: MarketPriceInfo): MarketPriceInfo.AsObject;
+  static serializeBinaryToWriter(message: MarketPriceInfo, writer: jspb.BinaryWriter): void;
+  static deserializeBinary(bytes: Uint8Array): MarketPriceInfo;
+  static deserializeBinaryFromReader(message: MarketPriceInfo, reader: jspb.BinaryReader): MarketPriceInfo;
 }
 
-export namespace MarketPrice {
+export namespace MarketPriceInfo {
   export type AsObject = {
     currencyCode: string,
     price: number,
