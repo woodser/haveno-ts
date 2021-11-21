@@ -9,10 +9,13 @@ This application is a lightly modified [create-react-app](https://github.com/fac
 1. [Run a local Haveno test network](https://github.com/haveno-dex/haveno/blob/master/docs/installing.md), running Alice as a daemon with `make alice-daemon`.
 2. `git clone https://github.com/haveno-dex/haveno-ui-poc`
 3. In a new terminal, start envoy with the config in haveno-ui-poc/config/envoy.yaml (change absolute path for your system): `docker run --rm --add-host host.docker.internal:host-gateway -it -v ~/git/haveno-ui-poc/config/envoy.yaml:/envoy.yaml -p 8080:8080 envoyproxy/envoy-dev:8a2143613d43d17d1eb35a24b4a4a4c432215606 -c /envoy.yaml`
-4. `cd haveno-ui-poc`
-5. `npm install`
-6. `npm start` to open http://localhost:3000 in a browser
-7. Confirm that the Haveno daemon version is displayed (1.6.2)
+4. Install protobuf for your system.<br>
+    mac: `brew install protobuf`<br>
+    linux: `apt install protobuf-compiler`
+5. `cd haveno-ui-poc`
+6. `npm install`
+7. `npm start` to open http://localhost:3000 in a browser
+8. Confirm that the Haveno daemon version is displayed (1.6.2)
 
 <p align="center">
     <img src="haveno-ui-poc.png" width="500"/><br>
@@ -31,15 +34,3 @@ Running the [top-level API tests](./src/HavenoDaemon.test.tsx) is a great way to
 5. `cd haveno-ui-poc`
 6. `npm install`
 7. `npm test` to run all tests or `npm run test -- -t 'my test'` to run tests by name.
-
-
-## Protobuf Client
-
-Typescript imports are generated automatically from `.proto` files into the `./src/protobuf` directory when running `npm install` or `npm test`.
-
-`.proto` files are taken from the **haveno-dex/haveno repository which has to be cloned in the same directory as this one**.
-E.g. `~/git/haveno` and `~/git/haveno-ui-poc`
-
-`protobuf` needs to be installed on your system
-- e.g. on mac: `brew install protobuf`
-- on debian linux: `apt install protobuf-compiler`
