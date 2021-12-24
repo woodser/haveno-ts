@@ -6,6 +6,7 @@ import {HavenoUtils} from "./HavenoUtils";
 import * as grpcWeb from 'grpc-web';
 import {XmrBalanceInfo, OfferInfo, TradeInfo, MarketPriceInfo} from './protobuf/grpc_pb'; // TODO (woodser): better names; haveno_grpc_pb, haveno_pb
 import {PaymentAccount, Offer} from './protobuf/pb_pb';
+import {XmrDestination, XmrTx} from './protobuf/grpc_pb';
 
 // import monero-javascript
 const monerojs = require("monero-javascript"); // TODO (woodser): support typescript and `npm install @types/monero-javascript` in monero-javascript
@@ -614,6 +615,36 @@ test("Can complete a trade", async () => {
   expect(aliceFee).toBeGreaterThan(BigInt("0"));
   expect(bobFee).toBeLessThanOrEqual(TestConfig.maxFee);
   expect(bobFee).toBeGreaterThan(BigInt("0"));
+});
+
+test("can call Wallet API", async () => {
+  console.log("Alice testing getXmrTxs");
+  let txs: XmrTx[]= await alice.getXmrTxs();
+  for (let tx: XmrTx of txs){
+      console.log(tx.getHash());
+      console.log(tx.getTimestamp());
+      //console.log(tx.getIncomingTransfersList());
+      //console.log(tx.getOutgoingTransfer());
+      console.log(tx.getMetadata());
+ 
+  }
+
+  //await wait(10000);
+ 
+  console.log("Alice testing createXmrTx");
+  let destinations: XmrDestination[] = [];
+  let dest: XmrDestination = new XmrDestination().setAddress("57gD1C2fRrmMuCvZnFcCzf85dfCuvxBbkGjkkjcPM7i8VuVaSoSYBaAMkBwuGd5Edeao3KQeLxo1ZPLheDDC2EN4KxCJU6U").setAmount("100000000000");
+  destinations.push(dest);
+  let tx = await alice.createXmrTx(destinations);
+  let tx_metadata = tx.getMetadata();
+
+  //await wait(10000);
+  
+  console.log("Alice testing relayXmrTx");
+  let tx_hash = await alice.relayXmrTx(tx_metadata);
+  expect (tx_hash.length).toEqual(64);
+  console.log(tx_hash);
+  
 });
 
 // ------------------------------- HELPERS ------------------------------------
