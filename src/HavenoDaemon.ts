@@ -1,7 +1,7 @@
 import {HavenoUtils} from "./HavenoUtils";
 import * as grpcWeb from 'grpc-web';
 import {GetVersionClient, MoneroConnectionsClient, DisputeAgentsClient, PriceClient, WalletsClient, OffersClient, PaymentAccountsClient, TradesClient} from './protobuf/GrpcServiceClientPb';
-import {GetVersionRequest, GetVersionReply, UriConnection, AddConnectionRequest, SetConnectionRequest, GetConnectionRequest, GetConnectionsReply, GetConnectionReply, GetConnectionsRequest, CheckConnectionRequest, CheckConnectionReply, CheckConnectionsRequest, CheckConnectionsReply, RegisterDisputeAgentRequest, CheckCurrentConnectionRequest, CheckCurrentConnectionReply, ExtendedSetConnectionRequest, GetBestAvailableConnectionRequest, GetBestAvailableConnectionReply, RemoveConnectionRequest, StartCheckingConnectionsRequest, StopCheckingConnectionsRequest, SetAutoSwitchRequest, MarketPriceRequest, MarketPriceReply, MarketPricesRequest, MarketPricesReply, MarketPriceInfo, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetTradesRequest, GetTradesReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest, XmrTx, GetXmrTxsRequest, GetXmrTxsReply, XmrDestination, CreateXmrTxRequest, CreateXmrTxReply, RelayXmrTxRequest, RelayXmrTxReply} from './protobuf/grpc_pb';
+import {GetVersionRequest, GetVersionReply, RegisterDisputeAgentRequest, UriConnection, AddConnectionRequest, SetConnectionRequest, GetConnectionRequest, GetConnectionReply, GetConnectionsRequest, GetConnectionsReply, CheckConnectionRequest, CheckConnectionReply, CheckConnectionsRequest, CheckConnectionsReply, GetBestAvailableConnectionRequest, GetBestAvailableConnectionReply, RemoveConnectionRequest, StartCheckingConnectionsRequest, StopCheckingConnectionsRequest, SetAutoSwitchRequest, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, MarketPriceRequest, MarketPriceReply, MarketPricesRequest, MarketPricesReply, MarketPriceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetTradesRequest, GetTradesReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest, XmrTx, GetXmrTxsRequest, GetXmrTxsReply, XmrDestination, CreateXmrTxRequest, CreateXmrTxReply, RelayXmrTxRequest, RelayXmrTxReply} from './protobuf/grpc_pb';
 import {PaymentAccount, AvailabilityResult} from './protobuf/pb_pb';
 const console = require('console');
 
@@ -10,20 +10,20 @@ const console = require('console');
  */
 class HavenoDaemon {
   
-  // instance variables
   _url: string;
   _password: string;
   _process: any;
   _processLogging: boolean = false;
   _walletRpcPort: number|undefined;
+  _appName: string|undefined;
   _getVersionClient: GetVersionClient;
   _disputeAgentsClient: DisputeAgentsClient;
-  _priceClient: PriceClient;
+  _moneroConnectionsClient: MoneroConnectionsClient;
   _walletsClient: WalletsClient;
+  _priceClient: PriceClient;
   _paymentAccountsClient: PaymentAccountsClient;
   _offersClient: OffersClient;
   _tradesClient: TradesClient;
-  _moneroConnectionsClient: MoneroConnectionsClient;
   
   /**
    * Construct a client connected to a Haveno daemon.
@@ -39,12 +39,12 @@ class HavenoDaemon {
     this._password = password;
     this._getVersionClient = new GetVersionClient(this._url);
     this._disputeAgentsClient = new DisputeAgentsClient(this._url);
-    this._priceClient = new PriceClient(this._url);
+    this._moneroConnectionsClient = new MoneroConnectionsClient(this._url)
     this._walletsClient = new WalletsClient(this._url);
+    this._priceClient = new PriceClient(this._url);
     this._paymentAccountsClient = new PaymentAccountsClient(this._url);
     this._offersClient = new OffersClient(this._url);
     this._tradesClient = new TradesClient(this._url);
-    this._moneroConnectionsClient = new MoneroConnectionsClient(this._url)
   }
   
   /**
@@ -93,6 +93,7 @@ class HavenoDaemon {
           daemon = new HavenoDaemon(url, password);
           daemon._process = childProcess;
           daemon._processLogging = enableLogging;
+          daemon._appName = cmd[cmd.indexOf("--appName") + 1];
           
           // get wallet rpc port
           let walletRpcPortIdx = cmd.indexOf("--walletRpcBindPort");
@@ -189,6 +190,13 @@ class HavenoDaemon {
   }
   
   /**
+   * Get the name of the Haveno application folder.
+   */
+  getAppName(): string|undefined {
+    return this._appName;
+  }
+  
+  /**
    * Get the Haveno version.
    * 
    * @return {string} the Haveno daemon version 
@@ -223,32 +231,174 @@ class HavenoDaemon {
   }
   
   /**
-   * Get the current market price per 1 XMR in the given currency.
-   * 
-   * @param {string} currencyCode - currency code (fiat or crypto) to get the price of
-   * @return {number} the current market price per 1 XMR in the given currency
+   * Add a Monero daemon connection.
+   *
+   * @param {UriConnection} connection - daemon connection to add
    */
-  async getPrice(currencyCode: string): Promise<number> {
+  async addMoneroConnection(connection: UriConnection): Promise<void> {
     let that = this;
     return new Promise(function(resolve, reject) {
-      that._priceClient.getMarketPrice(new MarketPriceRequest().setCurrencyCode(currencyCode), {password: that._password}, function(err: grpcWeb.RpcError, response: MarketPriceReply) {
+      that._moneroConnectionsClient.addConnection(new AddConnectionRequest().setConnection(connection), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
-        else resolve(response.getPrice());
+        else resolve();
       });
     });
   }
-
+  
   /**
-   * Get the current market prices of all the currencies.
-   * 
-   * @return {MarketPrice[]} price per 1 XMR in all supported currencies (fiat & crypto)
+   * Remove a Monero daemon connection.
+   *
+   * @param {string} uri - uri of the daemon connection to remove
    */
-  async getPrices(): Promise<MarketPriceInfo[]> {
+  async removeMoneroConnection(uri: string): Promise<void> {
     let that = this;
     return new Promise(function(resolve, reject) {
-      that._priceClient.getMarketPrices(new MarketPricesRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: MarketPricesReply) {
+      that._moneroConnectionsClient.removeConnection(new RemoveConnectionRequest().setUri(uri), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
-        else resolve(response.getMarketPriceList());
+        else resolve();
+      });
+    });
+  }
+  
+  /**
+   * Get the current Monero daemon connection.
+   *
+   * @return {UriConnection | undefined} the current daemon connection, undefined if no current connection
+   */
+  async getMoneroConnection(): Promise<UriConnection | undefined> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.getConnection(new GetConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetConnectionReply) {
+        if (err) reject(err);
+        else resolve(response.getConnection());
+      });
+    });
+  }
+  
+  /**
+   * Get all Monero daemon connections.
+   *
+   * @return {UriConnection[]} all daemon connections
+   */
+  async getMoneroConnections(): Promise<UriConnection[]> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.getConnections(new GetConnectionsRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetConnectionsReply) {
+        if (err) reject(err);
+        else resolve(response.getConnectionsList());
+      });
+    });
+  }
+  
+  /**
+   * Set the current Monero daemon connection.
+   * 
+   * Add the connection if not previously seen.
+   * If the connection is provided as string, connect to the URI with any previously set credentials and priority.
+   * If the connection is provided as UriConnection, overwrite any previously set credentials and priority.
+   * If undefined connection provided, disconnect the client.
+   * 
+   * @param {string | UriConnection} connection - connection to set as current
+   */
+  async setMoneroConnection(connection?: string | UriConnection): Promise<void> {
+    let that = this;
+    let request = new SetConnectionRequest();
+    if (typeof connection === "string") request.setUri(connection);
+    else request.setConnection(connection);
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.setConnection(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  } 
+  
+  /**
+   * Check the current Monero daemon connection.
+   * 
+   * If disconnected and auto switch enabled, switch to the best available connection and return its status.
+   *
+   * @return {UriConnection | undefined} the current daemon connection status, undefined if no current connection
+   */
+  async checkMoneroConnection(): Promise<UriConnection | undefined> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.checkConnection(new CheckConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: CheckConnectionReply) {
+        if (err) reject(err);
+        else resolve(response.getConnection());
+      });
+    });
+  }
+  
+  /**
+   * Check all Monero daemon connections.
+   *
+   * @return {UriConnection[]} status of all managed connections.
+   */
+  async checkMoneroConnections(): Promise<UriConnection[]> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.checkConnections(new CheckConnectionsRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: CheckConnectionsReply) {
+        if (err) reject(err);
+        else resolve(response.getConnectionsList());
+      });
+    });
+  }
+  
+  /**
+   * Check the connection and start checking the connection periodically.
+   *
+   * @param {number} refreshPeriod - time between checks in milliseconds (default 15000 ms or 15 seconds)
+   */
+  async startCheckingConnection(refreshPeriod: number): Promise<void> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.startCheckingConnections(new StartCheckingConnectionsRequest().setRefreshPeriod(refreshPeriod), {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  
+  /**
+   * Stop checking the connection status periodically.
+   */
+  async stopCheckingConnection(): Promise<void> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.stopCheckingConnections(new StopCheckingConnectionsRequest(), {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  
+  /**
+   * Get the best available connection in order of priority then response time.
+   *
+   * @return {UriConnection | undefined} the best available connection in order of priority then response time, undefined if no connections available
+   */
+  async getBestAvailableConnection(): Promise<UriConnection | undefined> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.getBestAvailableConnection(new GetBestAvailableConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetBestAvailableConnectionReply) {
+        if (err) reject(err);
+        else resolve(response.getConnection());
+      });
+    });
+  }
+  
+  /**
+   * Automatically switch to the best available connection if current connection is disconnected after being checked.
+   *
+   * @param {boolean} autoSwitch - whether auto switch is enabled or disabled
+   */
+  async setAutoSwitch(autoSwitch: boolean): Promise<void> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._moneroConnectionsClient.setAutoSwitch(new SetAutoSwitchRequest().setAutoSwitch(autoSwitch), {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
       });
     });
   }
@@ -326,7 +476,7 @@ class HavenoDaemon {
       });
     });
   }
-
+  
   /**
    * Relay a previously created transaction to send funds from the Monero wallet.
    * 
@@ -341,7 +491,38 @@ class HavenoDaemon {
       });
     });
   }
-
+  
+  /**
+   * Get the current market price per 1 XMR in the given currency.
+   * 
+   * @param {string} currencyCode - currency code (fiat or crypto) to get the price of
+   * @return {number} the current market price per 1 XMR in the given currency
+   */
+  async getPrice(currencyCode: string): Promise<number> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._priceClient.getMarketPrice(new MarketPriceRequest().setCurrencyCode(currencyCode), {password: that._password}, function(err: grpcWeb.RpcError, response: MarketPriceReply) {
+        if (err) reject(err);
+        else resolve(response.getPrice());
+      });
+    });
+  }
+  
+  /**
+   * Get the current market prices of all the currencies.
+   * 
+   * @return {MarketPrice[]} price per 1 XMR in all supported currencies (fiat & crypto)
+   */
+  async getPrices(): Promise<MarketPriceInfo[]> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._priceClient.getMarketPrices(new MarketPricesRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: MarketPricesReply) {
+        if (err) reject(err);
+        else resolve(response.getMarketPriceList());
+      });
+    });
+  }
+  
   /**
    * Get payment accounts.
    * 
@@ -570,218 +751,6 @@ class HavenoDaemon {
       });
     });
   }
-  
-  /**
-   * Adds a managed monero connection.
-   *
-   * @param {UriConnection} connection - the connection to add
-   */
-  async addMoneroConnection(connection: UriConnection): Promise<void> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      let addConnectionRequest = new AddConnectionRequest();
-      addConnectionRequest.setConnection(connection);
-      that._moneroConnectionsClient.addConnection(addConnectionRequest, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-  
-  /**
-   * Removes a managed monero connection.
-   *
-   * @param {string} uri - the uri of the connection to remove
-   */
-  async removeMoneroConnection(uri: string): Promise<void> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      let removeConnectionRequest = new RemoveConnectionRequest();
-      removeConnectionRequest.setUri(uri);
-      that._moneroConnectionsClient.removeConnection(removeConnectionRequest, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-  
-  /**
-   * Get the current monero connection.
-   *
-   * @return {UriConnection | undefined} current monero connection, undefined if no connection is set as current connection.
-   */
-  async getMoneroConnection(): Promise<UriConnection | undefined> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.getConnection(new GetConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetConnectionReply) {
-        if (err) reject(err);
-        else resolve(response.getConnection());
-      });
-    });
-  }
-  
-  /**
-   * Get all managed connections.
-   *
-   * @return {UriConnection[]} all managed connections.
-   */
-  async getMoneroConnections(): Promise<UriConnection[]> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.getConnections(new GetConnectionsRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetConnectionsReply) {
-        if (err) reject(err);
-        else resolve(response.getConnectionsList());
-      });
-    });
-  }
-  
-  /**
-   * Sets the current connection.
-   * If the connection is provided as string, it must be already present.
-   * If the connection is provided as UriConnection and the connection uri is already present,
-   * it overrides any login credentials (priority is unaffected).
-   * Otherwise the connection is added first.
-   * If connection is undefined, the connection to the client is disconnected.
-   *
-   * @param {string | UriConnection} connection The connection to set. Overrides credentials if provided.
-   */
-  async setMoneroConnection(connection?: string | UriConnection): Promise<void> {
-    let that = this;
-    if (typeof connection === "string") {
-      return new Promise(function(resolve, reject) {
-        let setConnectionRequest = new SetConnectionRequest();
-        setConnectionRequest.setUri(connection);
-        that._moneroConnectionsClient.setConnection(setConnectionRequest, {password: that._password}, function(err: grpcWeb.RpcError) {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-    } else {
-      return new Promise(function(resolve, reject) {
-        let extendedSetConnectionRequest = new ExtendedSetConnectionRequest();
-        extendedSetConnectionRequest.setConnection(connection);
-        that._moneroConnectionsClient.extendedSetConnection(extendedSetConnectionRequest, {password: that._password}, function(err: grpcWeb.RpcError) {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-    }
-  }
-  
-  /**
-   * Check the status of the current connection.
-   * If the connection is disconnected and auto switch enabled, switches to best available connection,
-   * and returns its status.
-   *
-   * @return {UriConnection | undefined} status of the connection after a check, undefined if no connection is set as current connection.
-   */
-  async checkCurrentMoneroConnection(): Promise<UriConnection | undefined> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.checkCurrentConnection(new CheckCurrentConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: CheckCurrentConnectionReply) {
-        if (err) reject(err);
-        else resolve(response.getConnection());
-      });
-    });
-  }
-  
-  /**
-   * Check the status of the provided connection.
-   * Does not perform any auto switch.
-   *
-   * @param {UriConnection} connection - Possible connection to check
-   * @return {UriConnection} status of the provided connection
-   */
-  async checkMoneroConnection(connection: UriConnection): Promise<UriConnection> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      let checkConnectionRequest = new CheckConnectionRequest();
-      checkConnectionRequest.setConnection(connection);
-      that._moneroConnectionsClient.checkConnection(checkConnectionRequest, {password: that._password}, function(err: grpcWeb.RpcError, response: CheckConnectionReply) {
-        if (err) reject(err);
-        else resolve(response.getConnection()!);
-      });
-    });
-  }
-  
-  /**
-   * Check the status of all registered connections.
-   * Does not perform any auto switch.
-   *
-   * @return {UriConnection[]} status of all managed connections.
-   */
-  async checkMoneroConnections(): Promise<UriConnection[]> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.checkConnections(new CheckConnectionsRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: CheckConnectionsReply) {
-        if (err) reject(err);
-        else resolve(response.getConnectionsList());
-      });
-    });
-  }
-  
-  /**
-   * Automatically check the current connection status in a fixed period loop.
-   *
-   * @param {number} refreshPeriod - The time between checks in milliseconds (default 10000 ms or 10 seconds)
-   */
-  async startCheckingConnection(refreshPeriod: number): Promise<void> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      let startCheckingConnectionsRequest = new StartCheckingConnectionsRequest();
-      startCheckingConnectionsRequest.setRefreshPeriod(refreshPeriod);
-      that._moneroConnectionsClient.startCheckingConnections(startCheckingConnectionsRequest, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-  
-  /**
-   * Stop automatically checking the current connection status.
-   */
-  async stopCheckingConnection(): Promise<void> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.stopCheckingConnections(new StopCheckingConnectionsRequest(), {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-  
-  /**
-   * Get best available connection in order of priority then response time.
-   *
-   * @return {UriConnection | undefined} best available connection, undefined if no managed connection exists.
-   */
-  async getBestAvailableConnection(): Promise<UriConnection | undefined> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.getBestAvailableConnection(new GetBestAvailableConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetBestAvailableConnectionReply) {
-        if (err) reject(err);
-        else resolve(response.getConnection());
-      });
-    });
-  }
-  
-  /**
-   * Automatically switch to best available connection if current connection is disconnected after being checked.
-   *
-   * @param {boolean} autoSwitch - Whether automatic switch should be enabled or disabled
-   */
-  async setAutoSwitch(autoSwitch: boolean): Promise<void> {
-    let that = this;
-    return new Promise(function(resolve, reject) {
-      let setAutoSwitchRequest = new SetAutoSwitchRequest();
-      setAutoSwitchRequest.setAutoSwitch(autoSwitch);
-      that._moneroConnectionsClient.setAutoSwitch(setAutoSwitchRequest, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-  
 }
 
 export {HavenoDaemon};
