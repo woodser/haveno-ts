@@ -1,8 +1,8 @@
 import {HavenoUtils} from "./HavenoUtils";
 import * as grpcWeb from 'grpc-web';
-import {GetVersionClient, DisputeAgentsClient, PriceClient, WalletsClient, OffersClient, PaymentAccountsClient, TradesClient} from './protobuf/GrpcServiceClientPb';
-import {GetVersionRequest, GetVersionReply, RegisterDisputeAgentRequest, MarketPriceRequest, MarketPriceReply, MarketPricesRequest, MarketPricesReply, MarketPriceInfo, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetTradesRequest, GetTradesReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest, XmrTx, GetXmrTxsRequest, GetXmrTxsReply, XmrDestination, CreateXmrTxRequest, CreateXmrTxReply, RelayXmrTxRequest, RelayXmrTxReply} from './protobuf/grpc_pb';
-import {PaymentAccount, AvailabilityResult} from './protobuf/pb_pb';
+import {DisputeAgentsClient, GetVersionClient, NotificationsClient, PriceClient, WalletsClient, OffersClient, PaymentAccountsClient, TradesClient} from './protobuf/GrpcServiceClientPb';
+import {CancelOfferRequest, ConfirmPaymentReceivedRequest, ConfirmPaymentStartedRequest, CreateCryptoCurrencyPaymentAccountReply, CreateCryptoCurrencyPaymentAccountRequest, CreateOfferReply, CreateOfferRequest, CreateXmrTxReply, CreateXmrTxRequest, GetBalancesReply, GetBalancesRequest, GetNewDepositSubaddressReply, GetNewDepositSubaddressRequest, GetOffersReply, GetOffersRequest, GetPaymentAccountsReply, GetPaymentAccountsRequest, GetTradeReply, GetTradeRequest, GetTradesReply, GetTradesRequest, GetVersionReply, GetVersionRequest, GetXmrTxsReply, GetXmrTxsRequest, MarketPriceInfo, MarketPriceReply, MarketPriceRequest, MarketPricesReply, MarketPricesRequest, NotificationMessage, OfferInfo, RegisterDisputeAgentRequest, RegisterNotificationListenerRequest, RelayXmrTxReply, RelayXmrTxRequest, SendNotificationRequest, TakeOfferReply, TakeOfferRequest, TradeInfo, XmrBalanceInfo, XmrDestination, XmrTx} from './protobuf/grpc_pb';
+import {AvailabilityResult, PaymentAccount} from './protobuf/pb_pb';
 const console = require('console');
 
 /**
@@ -23,6 +23,7 @@ class HavenoDaemon {
   _paymentAccountsClient: PaymentAccountsClient;
   _offersClient: OffersClient;
   _tradesClient: TradesClient;
+  _notificationsClient: NotificationsClient;
   
   /**
    * Construct a client connected to a Haveno daemon.
@@ -43,6 +44,7 @@ class HavenoDaemon {
     this._paymentAccountsClient = new PaymentAccountsClient(this._url);
     this._offersClient = new OffersClient(this._url);
     this._tradesClient = new TradesClient(this._url);
+    this._notificationsClient = new NotificationsClient(this._url);
   }
   
   /**
@@ -203,7 +205,7 @@ class HavenoDaemon {
   
   /**
    * Register as a dispute agent.
-   * 
+   *
    * @param {string} disputeAgentType - type of dispute agent to register, e.g. mediator, refundagent
    * @param {string} registrationKey - registration key
    */
@@ -563,6 +565,43 @@ class HavenoDaemon {
     let that = this;
     return new Promise(function(resolve, reject) {
       that._tradesClient.confirmPaymentReceived(new ConfirmPaymentReceivedRequest().setTradeId(tradeId), {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  
+  /**
+   * Register a new listener for notifications.
+   * Due to the nature of grpc streaming, this method returns a promise,
+   * which may be resolved before the listener is actually registered.
+   *
+   * @param {function(NotificationMessage): void} listener - listener which should be notified
+   */
+  async onNotification(listener: (notification: NotificationMessage) => void): Promise<void> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._notificationsClient.registerNotificationListener(new RegisterNotificationListenerRequest(), {password: that._password})
+        .on("data", (data) => {
+          if (data instanceof NotificationMessage) {
+            listener(data);
+          }
+        });
+      resolve();
+    });
+  }
+  
+  /**
+   * Sends a notification to all registered listeners.
+   * Should only be used for testing purposes.
+   * @param {NotificationMessage} notification - notification to send
+   */
+  async sendNotification(notification: NotificationMessage): Promise<void> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      let request = new SendNotificationRequest();
+      request.setNotification(notification);
+      that._notificationsClient.sendNotification(request, {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });

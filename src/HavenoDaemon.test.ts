@@ -4,7 +4,7 @@
 import {HavenoDaemon} from "./HavenoDaemon";
 import {HavenoUtils} from "./HavenoUtils";
 import * as grpcWeb from 'grpc-web';
-import {XmrBalanceInfo, OfferInfo, TradeInfo, MarketPriceInfo} from './protobuf/grpc_pb'; // TODO (woodser): better names; haveno_grpc_pb, haveno_pb
+import {MarketPriceInfo, NotificationMessage, OfferInfo, TradeInfo, XmrBalanceInfo} from './protobuf/grpc_pb'; // TODO (woodser): better names; haveno_grpc_pb, haveno_pb
 import {PaymentAccount} from './protobuf/pb_pb';
 import {XmrDestination, XmrTx, XmrIncomingTransfer, XmrOutgoingTransfer} from './protobuf/grpc_pb';
 
@@ -701,7 +701,48 @@ test("Can complete a trade", async () => {
   expect(bobFee).toBeGreaterThan(BigInt("0"));
 });
 
+test("Can listen on notifications and receives them", async () => {
+  let notificationReceived = false;
+  
+  await alice.onNotification(notification => {
+    console.log("Received notification " + notification);
+    notificationReceived = true;
+  })
+  
+  // Wait until the notification listener is actually registered
+  // This is not immediately the case, as the promise resolves before the call is complete
+  wait(2000);
+  
+  let notification: NotificationMessage = new NotificationMessage();
+  notification.setMessage("Test message");
+  notification.setTitle("Test title");
+  await alice.sendNotification(notification);
+  
+  return sleepUntil(() => notificationReceived, 1000);
+});
+
 // ------------------------------- HELPERS ------------------------------------
+
+/**
+ * Wait until the given predicate returns true, or the timeout exceeds.
+ */
+async function sleepUntil(predicate: () => boolean, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let timeWas = new Date().getTime();
+    let wait = setInterval(function() {
+      let timeNow = new Date().getTime();
+      if (predicate()) {
+        console.log("resolved after", timeNow - timeWas, "ms");
+        clearInterval(wait);
+        resolve();
+      } else if (timeNow - timeWas > timeoutMs) { // Timeout
+        console.log("rejected after", timeNow - timeWas, "ms");
+        clearInterval(wait);
+        reject();
+      }
+    }, 20);
+  });
+}
 
 /**
  * Initialize arbitrator, alice, or bob by their configuration.
