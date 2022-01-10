@@ -188,6 +188,32 @@ test("Can register as dispute agents", async () => {
   }
 });
 
+test("Can receive push notifications", async () => {
+  
+  // add notification listener
+  let notifications: NotificationMessage[] = [];
+  await alice.addNotificationListener(notification => {
+    notifications.push(notification);
+  });
+  
+  // send test notification
+  for (let i = 0; i < 3; i++) {
+    await alice._sendNotification(new NotificationMessage()
+        .setTimestamp(Date.now())
+        .setTitle("Test title")
+        .setMessage("Test message"));
+  }
+  
+  // test notification
+  await wait(1000);
+  assert.equal(3, notifications.length);
+  for (let i = 0; i < 3; i++) {
+    assert(notifications[i].getTimestamp() > 0);
+    assert.equal("Test title", notifications[i].getTitle());
+    assert.equal("Test message", notifications[i].getMessage());
+  }
+});
+
 test("Can get market prices", async () => {
   
   // get all market prices
@@ -596,6 +622,12 @@ test("Can complete a trade", async () => {
   let aliceBalancesBefore = await alice.getBalances();
   let bobBalancesBefore: XmrBalanceInfo = await bob.getBalances();
   
+  // register to receive notifications
+  let aliceNotifications: NotificationMessage[] = [];
+  let bobNotifications: NotificationMessage[] = [];
+  await alice.addNotificationListener(notification => { aliceNotifications.push(notification); });
+  await bob.addNotificationListener(notification => { bobNotifications.push(notification); });
+  
   // alice posts offer to buy xmr
   console.log("Alice posting offer");
   let direction = "buy";
@@ -636,6 +668,11 @@ test("Can complete a trade", async () => {
   let trade: TradeInfo = await bob.takeOffer(offer.getId(), ethPaymentAccount.getId()); // TODO (woodser): this returns before trade is fully initialized
   expect(trade.getPhase()).toEqual("DEPOSIT_PUBLISHED");
   console.log("Bob done taking offer in " + (Date.now() - startTime) + " ms");
+  
+  // alice is notified offer is taken
+  assert.equal(1, aliceNotifications.length);
+  assert.equal("Offer Taken", aliceNotifications[0].getTitle());
+  assert.equal("Your offer " + offer.getId() + " has been accepted", aliceNotifications[0].getMessage());
   
   // bob can get trade
   let fetchedTrade: TradeInfo = await bob.getTrade(trade.getTradeId());
@@ -699,26 +736,6 @@ test("Can complete a trade", async () => {
   expect(aliceFee).toBeGreaterThan(BigInt("0"));
   expect(bobFee).toBeLessThanOrEqual(TestConfig.maxFee);
   expect(bobFee).toBeGreaterThan(BigInt("0"));
-});
-
-test("Can listen on notifications and receives them", async () => {
-  let notificationReceived = false;
-  
-  await alice.onNotification(notification => {
-    console.log("Received notification " + notification);
-    notificationReceived = true;
-  })
-  
-  // Wait until the notification listener is actually registered
-  // This is not immediately the case, as the promise resolves before the call is complete
-  wait(2000);
-  
-  let notification: NotificationMessage = new NotificationMessage();
-  notification.setMessage("Test message");
-  notification.setTitle("Test title");
-  await alice.sendNotification(notification);
-  
-  return sleepUntil(() => notificationReceived, 1000);
 });
 
 // ------------------------------- HELPERS ------------------------------------

@@ -15,15 +15,16 @@ class HavenoDaemon {
   _password: string;
   _process: any;
   _processLogging: boolean = false;
+  _notificationListeners: ((notification: NotificationMessage) => void)[] = [];
   _walletRpcPort: number|undefined;
   _getVersionClient: GetVersionClient;
   _disputeAgentsClient: DisputeAgentsClient;
+  _notificationsClient: NotificationsClient;
   _priceClient: PriceClient;
   _walletsClient: WalletsClient;
   _paymentAccountsClient: PaymentAccountsClient;
   _offersClient: OffersClient;
   _tradesClient: TradesClient;
-  _notificationsClient: NotificationsClient;
   
   /**
    * Construct a client connected to a Haveno daemon.
@@ -205,7 +206,7 @@ class HavenoDaemon {
   
   /**
    * Register as a dispute agent.
-   *
+   * 
    * @param {string} disputeAgentType - type of dispute agent to register, e.g. mediator, refundagent
    * @param {string} registrationKey - registration key
    */
@@ -220,6 +221,16 @@ class HavenoDaemon {
         else resolve();
       });
     });
+  }
+  
+  /**
+   * Add a listener to receive notifications from the Haveno daemon.
+   * 
+   * @param {HavenoDaemonListener} listener - the notification listener to add
+   */
+  async addNotificationListener(listener: (notification: NotificationMessage) => void): Promise<void> {
+    this._notificationListeners.push(listener);
+    if (this._notificationListeners.length === 1) return this._registerNotificationListener();
   }
   
   /**
@@ -571,37 +582,35 @@ class HavenoDaemon {
     });
   }
   
+  // ------------------------------- HELPERS ----------------------------------
+  
   /**
-   * Register a new listener for notifications.
-   * Due to the nature of grpc streaming, this method returns a promise,
+   * Register a listener to receive notifications.
+   * Due to the nature of grpc streaming, this method returns a promise
    * which may be resolved before the listener is actually registered.
-   *
-   * @param {function(NotificationMessage): void} listener - listener which should be notified
    */
-  async onNotification(listener: (notification: NotificationMessage) => void): Promise<void> {
+  async _registerNotificationListener(): Promise<void> {
     let that = this;
-    return new Promise(function(resolve, reject) {
+    return new Promise(function(resolve) {
       that._notificationsClient.registerNotificationListener(new RegisterNotificationListenerRequest(), {password: that._password})
         .on("data", (data) => {
           if (data instanceof NotificationMessage) {
-            listener(data);
+            for (let listener of that._notificationListeners) listener(data);
           }
         });
-      resolve();
+      setTimeout(function() { resolve(); }, 1000); // TODO: call returns before listener registered
     });
   }
   
   /**
-   * Sends a notification to all registered listeners.
-   * Should only be used for testing purposes.
+   * Send a notification.
+   * 
    * @param {NotificationMessage} notification - notification to send
    */
-  async sendNotification(notification: NotificationMessage): Promise<void> {
+  async _sendNotification(notification: NotificationMessage): Promise<void> {
     let that = this;
     return new Promise(function(resolve, reject) {
-      let request = new SendNotificationRequest();
-      request.setNotification(notification);
-      that._notificationsClient.sendNotification(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._notificationsClient.sendNotification(new SendNotificationRequest().setNotification(notification), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
