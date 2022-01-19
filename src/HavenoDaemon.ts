@@ -797,7 +797,7 @@ class HavenoDaemon {
       
       // send request to register client listener
       that._notificationsClient.registerNotificationListener(new RegisterNotificationListenerRequest(), {password: that._password})
-        .on("data", (data) => {
+        .on('data', (data) => {
           if (data instanceof NotificationMessage) {
             for (let listener of that._notificationListeners) listener(data);
           }
@@ -855,23 +855,20 @@ class HavenoDaemon {
    * Backup the account to a zip file.
    */
   async backupAccount(stream: any): Promise<number> {
-
     let that = this;
     let request = new BackupAccountRequest();
     return new Promise(function(resolve, reject) {
-      let response = that._accountClient.backupAccount(request, {password: that._password});
       let total = 0;
-      response.on('data', function(chunk: BackupAccountReply) {
-        let bytes = chunk.getZipBytes();
+      let response = that._accountClient.backupAccount(request, {password: that._password});
+      response.on('data', (chunk) => {
+        let bytes = (chunk as BackupAccountReply).getZipBytes();
         total += bytes.length;
         console.log("Got a chunk of bytes, total:", total);
         stream.write(bytes);
       });
-
       response.on('error', function(err) {
         if(err) reject(err);
       });
-
       response.on('end', function() {
         resolve(total);
       });
