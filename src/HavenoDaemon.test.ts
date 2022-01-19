@@ -224,39 +224,6 @@ test("Can receive push notifications", async () => {
   }
 });
 
-test("Can get market prices", async () => {
-
-  // get all market prices
-  let prices: MarketPriceInfo[] = await alice.getPrices();
-  expect(prices.length).toBeGreaterThan(1);
-  for (let price of prices) {
-    expect(price.getCurrencyCode().length).toBeGreaterThan(0);
-    expect(price.getPrice()).toBeGreaterThanOrEqual(0);
-  }
-
-  // get market prices of specific currencies
-  for (let testAccount of TestConfig.cryptoAccounts) {
-    let price = await alice.getPrice(testAccount.currencyCode);
-    expect(price).toBeGreaterThan(0);
-  }
-
-  // test that prices are reasonable
-  let usd = await alice.getPrice("USD");
-  expect(usd).toBeGreaterThan(50);
-  expect(usd).toBeLessThan(5000);
-  let doge = await alice.getPrice("DOGE");
-  expect(doge).toBeGreaterThan(200)
-  expect(doge).toBeLessThan(20000);
-  let btc = await alice.getPrice("BTC");
-  expect(btc).toBeGreaterThan(0.0004)
-  expect(btc).toBeLessThan(0.4);
-
-  // test invalid currency
-  await expect(async () => {await alice.getPrice("INVALID_CURRENCY")})
-    .rejects
-    .toThrow('Currency not found: INVALID_CURRENCY');
-});
-
 test("Can manage Monero daemon connections", async () => {
   let monerod2: any;
   let charlie: HavenoDaemon | undefined;
@@ -280,7 +247,7 @@ test("Can manage Monero daemon connections", async () => {
 
     // add a new connection
     let fooBarUri = "http://foo.bar";
-    await charlie.addMoneroConnection(new UriConnection().setUri(fooBarUri));
+    await charlie.addMoneroConnection(fooBarUri);
     connections = await charlie.getMoneroConnections();
     connection = getConnection(connections, fooBarUri);
     testConnection(connection!, fooBarUri, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 0);
@@ -291,7 +258,7 @@ test("Can manage Monero daemon connections", async () => {
         .setUri(TestConfig.monerod2.uri)
         .setPriority(1));
     connection = await charlie.getMoneroConnection();
-    testConnection(connection!, TestConfig.monerod2.uri, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 1);
+    testConnection(connection!, TestConfig.monerod2.uri, undefined, undefined, 1); // status may or may not be known due to periodic connection checking
 
     // connection is offline
     connection = await charlie.checkMoneroConnection();
@@ -322,7 +289,7 @@ test("Can manage Monero daemon connections", async () => {
         .setPassword(TestConfig.monerod2.password)
         .setPriority(1));
     connection = await charlie.getMoneroConnection();
-    testConnection(connection!, TestConfig.monerod2.uri, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 1);
+    testConnection(connection!, TestConfig.monerod2.uri, undefined, undefined, 1);
 
     // connection is online and authenticated
     connection = await charlie.checkMoneroConnection();
@@ -345,16 +312,19 @@ test("Can manage Monero daemon connections", async () => {
     // stop monerod
     await monerod2.stopProcess();
 
-    // test auto switch
+    // test auto switch after periodic connection check
     await wait(TestConfig.daemonPollPeriodMs);
     connection = await charlie.getMoneroConnection();
     testConnection(connection!, monerodUri1, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
+
+    // stop checking connection periodically
+    await charlie.stopCheckingConnection();
 
     // remove current connection
     await charlie.removeMoneroConnection(monerodUri1);
 
     // check current connection
-    connection = await charlie.getMoneroConnection();
+    connection = await charlie.checkMoneroConnection();
     assert.equal(undefined, connection);
 
     // check all connections
@@ -363,14 +333,34 @@ test("Can manage Monero daemon connections", async () => {
     testConnection(getConnection(connections, fooBarUri)!, fooBarUri, OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION, 0);
     for (let connection of connections) testConnection(connection!, connection.getUri(), OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION);
 
-    // set connection by uri
+    // set connection to previous uri
     await charlie.setMoneroConnection(fooBarUri);
     connection = await charlie.getMoneroConnection();
     testConnection(connection!, fooBarUri, OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION, 0);
 
+    // set connection to new uri
+    let fooBarUri2 = "http://foo.bar.xyz";
+    await charlie.setMoneroConnection(fooBarUri2);
+    connections = await charlie.getMoneroConnections();
+    connection = getConnection(connections, fooBarUri2);
+    testConnection(connection!, fooBarUri2, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 0);
+
     // reset connection
     await charlie.setMoneroConnection();
     assert.equal(undefined, await charlie.getMoneroConnection());
+
+    // test auto switch after start checking connection
+    await charlie.setAutoSwitch(false);
+    await charlie.startCheckingConnection(5000); // checks the connection
+    await charlie.setAutoSwitch(true);
+    await charlie.addMoneroConnection(new UriConnection()
+            .setUri(TestConfig.monerod.uri)
+            .setUsername(TestConfig.monerod.username)
+            .setPassword(TestConfig.monerod.password)
+            .setPriority(2));
+    await wait(10000);
+    connection = await charlie.getMoneroConnection();
+    testConnection(connection!, TestConfig.monerod.uri, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 2);
   } catch (err2) {
     err = err2;
   }
@@ -440,6 +430,39 @@ test("Can get balances", async () => {
   expect(BigInt(balances.getLockedBalance())).toBeGreaterThanOrEqual(0);
   expect(BigInt(balances.getReservedOfferBalance())).toBeGreaterThanOrEqual(0);
   expect(BigInt(balances.getReservedTradeBalance())).toBeGreaterThanOrEqual(0);
+});
+
+test("Can get market prices", async () => {
+
+  // get all market prices
+  let prices: MarketPriceInfo[] = await alice.getPrices();
+  expect(prices.length).toBeGreaterThan(1);
+  for (let price of prices) {
+    expect(price.getCurrencyCode().length).toBeGreaterThan(0);
+    expect(price.getPrice()).toBeGreaterThanOrEqual(0);
+  }
+
+  // get market prices of specific currencies
+  for (let testAccount of TestConfig.cryptoAccounts) {
+    let price = await alice.getPrice(testAccount.currencyCode);
+    expect(price).toBeGreaterThan(0);
+  }
+
+  // test that prices are reasonable
+  let usd = await alice.getPrice("USD");
+  expect(usd).toBeGreaterThan(50);
+  expect(usd).toBeLessThan(5000);
+  let doge = await alice.getPrice("DOGE");
+  expect(doge).toBeGreaterThan(200)
+  expect(doge).toBeLessThan(20000);
+  let btc = await alice.getPrice("BTC");
+  expect(btc).toBeGreaterThan(0.0004)
+  expect(btc).toBeLessThan(0.4);
+
+  // test invalid currency
+  await expect(async () => {await alice.getPrice("INVALID_CURRENCY")})
+    .rejects
+    .toThrow('Currency not found: INVALID_CURRENCY');
 });
 
 test("Can get offers", async () => {

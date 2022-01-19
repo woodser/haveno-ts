@@ -251,12 +251,12 @@ class HavenoDaemon {
   /**
    * Add a Monero daemon connection.
    *
-   * @param {UriConnection} connection - daemon connection to add
+   * @param {string | UriConnection} connection - daemon uri or connection to add
    */
-  async addMoneroConnection(connection: UriConnection): Promise<void> {
+  async addMoneroConnection(connection: string | UriConnection): Promise<void> {
     let that = this;
     return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.addConnection(new AddConnectionRequest().setConnection(connection), {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._moneroConnectionsClient.addConnection(new AddConnectionRequest().setConnection(typeof connection === "string" ? new UriConnection().setUri(connection) : connection), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
