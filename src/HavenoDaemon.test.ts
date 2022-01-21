@@ -28,7 +28,7 @@ const net = require('net');
 // test config
 const TestConfig = {
     logging: {
-        level: 0, // set log level (gets more verbose increasing from 0)
+        level: 3, // set log level (gets more verbose increasing from 0)
         logProcessOutput: false, // enable or disable logging process output
     },
     moneroBinsDir: "../haveno/.localnet",
@@ -84,11 +84,11 @@ const TestConfig = {
         enableProcessOutput: false 
     }, 
     account: {
-      logProcessOutput: false,
+      logProcessOutput: true,
       appName: "haveno-XMR_STAGENET_account",
       url: "http://localhost:8082",
       password: "apitest",
-      passwordRequired: true,
+      passwordRequired: false,
       enableProcessOutput: false // Turn on to see output in same console. Account delete may purge logs.
     },
     maxFee: BigInt("75000000000"),
@@ -175,14 +175,18 @@ beforeEach(async() => {
   let testName =  expect.getState().currentTestName;
   console.log("Before test \"" + testName + "\"");
   if (testName.indexOf("Haveno account") >= 0) {
-    account = await initCleanAccountDaemon();
+    try {
+        account = await initCleanAccountDaemon();
+    } catch (err) {
+        console.log("ERROR: " + err.message);
+    }
   }
 });
 
 afterEach(async() => {
   let testName =  expect.getState().currentTestName;
   if (testName.indexOf("Haveno account") >= 0) {
-    await stopHavenoProcess(account);
+    //await stopHavenoProcess(account);
   }
 })
 
@@ -252,13 +256,17 @@ test("Can receive push notifications", async () => {
 });
 
 test("Haveno account create", async () => {
-  let daemon = account
+  let daemon = account;
+  console.log("test 1");
 
   // create account
   let password = "testPassword";
   await daemon.createAccount(password);
+  console.log("test 2");
   let exists = await daemon.accountExists();
+  console.log("test 2");
   assert(exists);
+  console.log("test 3");
 });
 
 test("Haveno account open", async () => {
@@ -1442,16 +1450,22 @@ function testOffer(offer: OfferInfo) {
 
 async function initCleanAccountDaemon() {
   // Init from existing instance if started up
+  console.log("INITING CLEAN ACCOUNT DAEMON");
   let daemon = await initHavenoDaemon(TestConfig.account);
+  console.log("done initing clean account daemon");
   let exists = await daemon.accountExists();
+  console.log("account exists: " + exists);
+  console.log("arbitrator account exists: " + await arbitrator.accountExists());
 
   // Delete and reinitialize process
   if (exists) {
-    //console.log("Account daemon has existing account, deleting");
-    await daemon.deleteAccount();
+    console.log("Account daemon has existing account, deleting");
+    await daemon.deleteAccount(); // TODO (woodser): this stops process
+    console.log("done stopping process");
     daemon = await initHavenoDaemon(TestConfig.account);
+    console.log("done restarting process");
   } else {
-    //console.log("Account daemon has no existing account");
+    console.log("Account daemon has no existing account");
   }
   return daemon;
 }

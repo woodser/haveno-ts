@@ -97,7 +97,7 @@ class HavenoDaemon {
         }
         
         // read success message or if a login is required
-        if ((line.indexOf("HavenoHeadlessAppMain: onSetupComplete") >= 0) || 
+        if ((line.indexOf("AppStartupState: Application fully initialized ") >= 0) || 
             (line.indexOf("HavenoDaemonMain: Interactive login required") >= 0)) {
           
           // get api password
