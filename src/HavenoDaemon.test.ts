@@ -175,11 +175,7 @@ beforeEach(async() => {
   let testName =  expect.getState().currentTestName;
   console.log("Before test \"" + testName + "\"");
   if (testName.indexOf("Haveno account") >= 0) {
-    try {
-        account = await initCleanAccountDaemon();
-    } catch (err) {
-        console.log("ERROR: " + err.message);
-    }
+    account = await initCleanAccountDaemon();
   }
 });
 
@@ -1467,5 +1463,6 @@ async function initCleanAccountDaemon() {
   } else {
     console.log("Account daemon has no existing account");
   }
+  console.log("Returning daemon!");
   return daemon;
 }
