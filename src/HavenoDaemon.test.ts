@@ -91,8 +91,7 @@ const TestConfig = {
             accountPassword: "abctesting123",
             walletUsername: "rpc_user",
             walletPassword: "abc123", // TODO (woodser): replace walletPassword with accountPassword
-            passwordRequired: false,
-            enableProcessOutput: false 
+            passwordRequired: true,
         }, {
             logProcessOutput: false,
             appName: "haveno-XMR_STAGENET_alice",       // alice
@@ -103,23 +102,13 @@ const TestConfig = {
             walletUsername: "rpc_user",
             walletPassword: "abc123",
             passwordRequired: true,
-            enableProcessOutput: false
         }, {
             logProcessOutput: false,
             appName: "haveno-XMR_STAGENET_bob",         // bob
             url: "http://localhost:8081",
             apiPassword: "apitest",
             accountPassword: "abctesting789",
-            passwordRequired: false,
-            enableProcessOutput: false 
-        }, {
-            logProcessOutput: true,
-            appName: "haveno-XMR_STAGENET_account",
-            url: "http://localhost:8082",
-            apiPassword: "apitest",
-            accountPassword: "abctestingXYZ",
             passwordRequired: true,
-            enableProcessOutput: false // Turn on to see output in same console. Account delete may purge logs.
         }
     ],
     account: {
@@ -217,19 +206,16 @@ beforeAll(async () => {
 });
 
 beforeEach(async() => {
-  let testName =  expect.getState().currentTestName;
-  if (testName.indexOf("Haveno account") >= 0) {
-    account = await initCleanAccountDaemon();
-  }
-  console.log("Before test \"" + testName + "\"");
+  console.log("Before test \"" + expect.getState().currentTestName + "\"");
 });
 
 afterEach(async() => {
-  let testName =  expect.getState().currentTestName;
-  if (testName.indexOf("Haveno account") >= 0) {
-    //await stopHavenoProcess(account);
-  }
-})
+  let stopPromises = [];
+  if (arbitrator && arbitrator.getProcess()) stopPromises.push(stopHavenoProcess(arbitrator));
+  if (alice && alice.getProcess()) stopPromises.push(stopHavenoProcess(alice));
+  if (bob && bob.getProcess()) stopPromises.push(stopHavenoProcess(bob));
+  return Promise.all(stopPromises);
+});
 
 afterAll(async () => {
   let stopPromises = [];
@@ -240,7 +226,6 @@ afterAll(async () => {
 });
 
 jest.setTimeout(500000);
-
 
 
 // ----------------------------------- TESTS ----------------------------------
@@ -1052,7 +1037,7 @@ test("Cannot make or take offer with insufficient unlocked funds", async () => {
   try {
     
     // start charlie
-    charlie = await startHavenoProcess(undefined, false, TestConfig.logging.logProcessOutput, false);
+    charlie = await startHavenoProcess(undefined, false, TestConfig.logging.logProcessOutput);
     
     // charlie creates ethereum payment account
     let paymentAccount = await createCryptoPaymentAccount(charlie);
@@ -1286,10 +1271,9 @@ async function startHavenoProcesses(numProcesses: number, enableLogging: boolean
  * @param {string|undefined} appName - the app folder name (default to name with unique id)
  * @param {boolean} passwordRequired - forces process to require login on startup
  * @param {boolean} enableLogging - specifies if process output should be logged
- * @param {boolean} enableOutput - outputs process output to cosole
  * @return {HavenoDaemon} the client connected to the started Haveno process
  */
-async function startHavenoProcess(appName: string|undefined, passwordRequired: boolean, enableLogging: boolean, enableOutput: boolean): Promise<HavenoDaemon> {
+async function startHavenoProcess(appName: string|undefined, passwordRequired: boolean, enableLogging: boolean): Promise<HavenoDaemon> {
   if (!appName) appName = "haveno-XMR_STAGENET_instance_" + GenUtils.getUUID();
   
   // get proxy port for haveno process
@@ -1335,7 +1319,7 @@ async function startHavenoProcess(appName: string|undefined, passwordRequired: b
     "--walletRpcBindPort", (proxyPort === "8080" ? new URL(TestConfig.alice.walletUrl).port : await getAvailablePort()) + "", // use alice's configured wallet rpc port 
     "--passwordRequired", (passwordRequired ? "true" : "false")
   ];
-  let havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + proxyPort, enableLogging, enableOutput);
+  let havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + proxyPort, enableLogging);
   HAVENO_PROCESSES.push(havenod);
   return havenod;
 }
@@ -1629,27 +1613,4 @@ function testCryptoPaymentAccount(paymentAccount: PaymentAccount) {
 function testOffer(offer: OfferInfo) {
   expect(offer.getId().length).toBeGreaterThan(0);
   // TODO: test rest of offer
-}
-
-async function initCleanAccountDaemon() {
-  // Init from existing instance if started up
-  console.log("INITING CLEAN ACCOUNT DAEMON");
-  let daemon = await initHavenoDaemon(TestConfig.account);
-  console.log("done initing clean account daemon");
-  let exists = await daemon.accountExists();
-  console.log("account exists: " + exists);
-  console.log("arbitrator account exists: " + await arbitrator.accountExists());
-
-  // Delete and reinitialize process
-  if (exists) {
-    console.log("Account daemon has existing account, deleting");
-    await daemon.deleteAccount(); // TODO (woodser): this stops process
-    console.log("done stopping process");
-    daemon = await initHavenoDaemon(TestConfig.account);
-    console.log("done restarting process");
-  } else {
-    console.log("Account daemon has no existing account");
-  }
-  console.log("Returning daemon!");
-  return daemon;
 }

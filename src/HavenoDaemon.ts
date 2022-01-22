@@ -66,10 +66,9 @@ class HavenoDaemon {
    * @param {string[]} cmd - command to start the process
    * @param {string} url - Haveno daemon url (must proxy to api port)
    * @param {boolean} enableLogging - specifies if logging is enabled or disabled at log level 3
-   * @param {boolean} enableOutput - writes output to console
    * @return {HavenoDaemon} a client connected to the newly started Haveno process
    */
-  static async startProcess(havenoPath: string, cmd: string[], url: string, enableLogging: boolean, enableOutput: boolean): Promise<HavenoDaemon> {
+  static async startProcess(havenoPath: string, cmd: string[], url: string, enableLogging: boolean): Promise<HavenoDaemon> {
     
     // return promise which resolves after starting havenod
     return new Promise(function(resolve, reject) {
@@ -90,11 +89,6 @@ class HavenoDaemon {
         let line = data.toString();
         if (HavenoUtils.getLogLevel() >= 3 && loggingEnabled()) process.stdout.write(line);
         output += line + '\n'; // capture output in case of error
-
-        if (enableOutput) {
-          console.log(line);
-
-        }
         
         // read success message or if a login is required
         if ((line.indexOf("AppStartupState: Application fully initialized ") >= 0) || 
