@@ -72,7 +72,7 @@ const TestConfig = {
         walletUri: "http://127.0.0.1:38091",
         walletUsername: "rpc_user",
         walletPassword: "abc123",
-        passwordRequired: false,
+        passwordRequired: true,
         enableProcessOutput: false 
     },
     bob: {
@@ -88,7 +88,7 @@ const TestConfig = {
       appName: "haveno-XMR_STAGENET_account",
       url: "http://localhost:8082",
       password: "apitest",
-      passwordRequired: false,
+      passwordRequired: true,
       enableProcessOutput: false // Turn on to see output in same console. Account delete may purge logs.
     },
     maxFee: BigInt("75000000000"),
@@ -173,10 +173,10 @@ beforeAll(async () => {
 
 beforeEach(async() => {
   let testName =  expect.getState().currentTestName;
-  console.log("Before test \"" + testName + "\"");
   if (testName.indexOf("Haveno account") >= 0) {
     account = await initCleanAccountDaemon();
   }
+  console.log("Before test \"" + testName + "\"");
 });
 
 afterEach(async() => {
