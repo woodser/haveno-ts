@@ -54,35 +54,6 @@ const TestConfig = {
         defaultPath: "test_funding_wallet",
         minimumFunding: BigInt("5000000000000")
     },
-    arbitrator: {
-        logProcessOutput: false,
-        appName: "haveno-XMR_STAGENET_arbitrator",
-        uri: "http://localhost:8079",
-        password: "apitest",
-        walletUsername: "rpc_user",
-        walletPassword: "abc123",
-        passwordRequired: false,
-        enableProcessOutput: false 
-    },
-    alice: {
-        logProcessOutput: false,
-        appName: "haveno-XMR_STAGENET_alice",
-        uri: "http://localhost:8080",
-        password: "apitest",
-        walletUri: "http://127.0.0.1:38091",
-        walletUsername: "rpc_user",
-        walletPassword: "abc123",
-        passwordRequired: true,
-        enableProcessOutput: false 
-    },
-    bob: {
-        logProcessOutput: false,
-        appName: "haveno-XMR_STAGENET_bob",
-        uri: "http://localhost:8081",
-        password: "apitest",
-        passwordRequired: false,
-        enableProcessOutput: false 
-    }, 
     startupDaemons: [{
             appName: "haveno-XMR_STAGENET_arbitrator",  // arbritrator
             logProcessOutput: false,
@@ -192,7 +163,7 @@ beforeAll(async () => {
   await arbitrator.registerDisputeAgent("refundagent", TestConfig.devPrivilegePrivKey);
 
   // connect monero clients
-  monerod = await monerojs.connectToDaemonRpc(TestConfig.monerod.url, TestConfig.monerod.username, TestConfig.monerod.password);
+  monerod = await monerojs.connectToDaemonRpc(TestConfig.monerod.uri, TestConfig.monerod.username, TestConfig.monerod.password);
   aliceWallet = await monerojs.connectToWalletRpc(TestConfig.startupDaemons[1].walletUrl, TestConfig.startupDaemons[1].walletUsername, TestConfig.startupDaemons[1].walletPassword);
   
   // initialize funding wallet
@@ -236,184 +207,27 @@ test("Can get the version", async () => {
 });
 
 test("Can manage an account", async () => {
-  let version = await arbitrator.getVersion();
-  expect(version).toEqual(TestConfig.haveno.version);
-});
-
-test("Can register as dispute agents", async () => {
-  await arbitrator.registerDisputeAgent("mediator", TestConfig.devPrivilegePrivKey);    // TODO: bisq mediator = haveno arbitrator
-  await arbitrator.registerDisputeAgent("refundagent", TestConfig.devPrivilegePrivKey); // TODO: no refund agent in haveno
-  
-  // test bad dispute agent type
+  let charlie: HavenoDaemon | undefined;
+  let err: any;
   try {
-    await arbitrator.registerDisputeAgent("unsupported type", TestConfig.devPrivilegePrivKey);
-    throw new Error("should have thrown error registering bad type");
-  } catch (err) {
-    if (err.message !== "unknown dispute agent type 'unsupported type'") throw new Error("Unexpected error: " + err.message);
-  }
-  
-  // test bad key
-  try {
-    await arbitrator.registerDisputeAgent("mediator", "bad key");
-    throw new Error("should have thrown error registering bad key");
-  } catch (err) {
-    if (err.message !== "invalid registration key") throw new Error("Unexpected error: " + err.message);
-  }
-});
 
-test("Can receive push notifications", async () => {
-
-  // add notification listener
-  let notifications: NotificationMessage[] = [];
-  await alice.addNotificationListener(notification => {
-    notifications.push(notification);
-  });
-
-  // send test notification
-  for (let i = 0; i < 3; i++) {
-    await alice._sendNotification(new NotificationMessage()
-        .setTimestamp(Date.now())
-        .setTitle("Test title")
-        .setMessage("Test message"));
+    // start charlie
+    charlie = await startHavenoProcess(undefined, true, TestConfig.logging.logProcessOutput);
+    assert(!await charlie.accountExists());
+    
+    // create account
+    let password = "testPassword";
+    await charlie.createAccount(password);
+    assert(await charlie.accountExists());
+    assert(await charlie.isAccountOpen());
+  } catch (err2) {
+    err = err2;
   }
 
-  // test notification
-  await wait(1000);
-  assert.equal(3, notifications.length);
-  for (let i = 0; i < 3; i++) {
-    assert(notifications[i].getTimestamp() > 0);
-    assert.equal("Test title", notifications[i].getTitle());
-    assert.equal("Test message", notifications[i].getMessage());
-  }
-});
-
-test("Haveno account create", async () => {
-  let daemon = account;
-  console.log("test 1");
-
-  // create account
-  let password = "testPassword";
-  await daemon.createAccount(password);
-  console.log("test 2");
-  let exists = await daemon.accountExists();
-  console.log("test 2");
-  assert(exists);
-  console.log("test 3");
-});
-
-test("Haveno account open", async () => {
-  
-  // create account
-  let password = "testPassword";
-  await account.createAccount(password);
-  let exists = await account.accountExists();
-  assert(exists);
-
-  // close account
-  await account.closeAccount();
-  let opened = await account.isAccountOpen();
-  assert(!opened);
-
-  // open
-  await account.openAccount(password);
-  opened = await account.isAccountOpen();
-  assert(opened);
-});
-
-test("Haveno account change password", async ()=> {
-
-  // change password should fail if not opened
-  try {
-    await account.changePassword("failPassword");
-    throw new Error("should have thrown error unopened account");
-  } catch (err) {
-    if (err.message !== "Cannot change password on unopened account") throw new Error("Unexpected error: " + err.message);
-  }
-
-  let password = "testPassword";
-  await account.createAccount(password);
-  let exists = await account.accountExists();
-  assert(exists);
-
-  // change password and reopen
-  await account.openAccount(password);
-  let newPassword = "changedPassword";
-  await account.changePassword(newPassword);
-  await account.closeAccount();
-  await account.openAccount(password);
-  let opened = await account.isAccountOpen();
-  assert(!opened);
-  await account.openAccount(newPassword);
-  opened = await account.isAccountOpen(); 
-  assert(opened);
-});
-
-test("Haveno account backup", async () => {
-
-  let password = "testPassword";
-  await account.createAccount(password);
-  let exists = await account.accountExists();
-  assert(exists);
-
-  // backup, first store into temp zip file
-  const fs = require('fs');
-  let rootDir = process.cwd()
-  let outDir = rootDir + '/../temp/';
-  if (!fs.existsSync(outDir)){
-    fs.mkdirSync(outDir);
-  }
-
-  let zipFile = outDir + 'backup.zip';
-
-  console.log("Backup will be stored in", zipFile);
-  let stream = fs.createWriteStream(zipFile);
-
-  let zipSize = await account.backupAccount(stream);
-  assert(zipSize > 0);
-  stream.end();
-});
-
-test("Haveno account delete", async () => {
-
-  console.log("Deleting non existing account should succeed");
-  await account.deleteAccount();
-
-  account = await initHavenoDaemon(TestConfig.account);
-
-  let password = "testPassword";
-  await account.createAccount(password);
-  let exists = await account.accountExists();
-  assert(exists);
-  
-  // Delete and wait for shutudown
-  await account.deleteAccount();
-
-  // Should have no account
-  account = await initHavenoDaemon(TestConfig.account);
-  exists = await account.accountExists();
-  assert(!exists);
-});
-
-
-test("Haveno account restore", async() => {
-
-  const fs = require('fs');
-  let rootDir = process.cwd()
-  let zipFile = rootDir + '/../temp/backup.zip';
-  let password = "testPassword";
-
-  // Restore and restart
-  console.log("Test assumes the backup test was ran once", zipFile);
-  let zipBytes: Uint8Array = new Uint8Array(fs.readFileSync(zipFile));
-  await account.restoreAccountChunked(zipBytes);
-  account = await initHavenoDaemon(TestConfig.account);
-  
-  // Open
-  let exists = await account.accountExists();
-  assert(exists);
-  await account.openAccount(password);
-  let opened = await account.isAccountOpen();
-  assert(opened);
+  // stop processes
+  if (charlie) await stopHavenoProcess(charlie);
+  // TODO: how to delete trader app folder at end of test?
+  if (err) throw err;
 });
 
 test("Haveno account create", async () => {
@@ -552,7 +366,7 @@ test("Can manage Monero daemon connections", async () => {
   try {
 
     // start charlie
-    charlie = await startHavenoProcess(undefined, false, TestConfig.logging.logProcessOutput, false);
+    charlie = await startHavenoProcess(undefined, false, TestConfig.logging.logProcessOutput);
 
     // test default connections
     let monerodUri1 = "http://localhost:38081"; // TODO: (woodser): move to config
@@ -619,7 +433,7 @@ test("Can manage Monero daemon connections", async () => {
     // restart charlie
     let appName = charlie.getAppName();
     await stopHavenoProcess(charlie);
-    charlie = await startHavenoProcess(appName, false, TestConfig.logging.logProcessOutput, false);
+    charlie = await startHavenoProcess(appName, false, TestConfig.logging.logProcessOutput);
 
     // connection is restored, online, and authenticated
     connection = await charlie.getMoneroConnection();
@@ -753,6 +567,32 @@ test("Can get balances", async () => {
   expect(BigInt(balances.getReservedTradeBalance())).toBeGreaterThanOrEqual(0);
 });
 
+test("Can receive push notifications", async () => {
+
+  // add notification listener
+  let notifications: NotificationMessage[] = [];
+  await alice.addNotificationListener(notification => {
+    notifications.push(notification);
+  });
+
+  // send test notification
+  for (let i = 0; i < 3; i++) {
+    await alice._sendNotification(new NotificationMessage()
+        .setTimestamp(Date.now())
+        .setTitle("Test title")
+        .setMessage("Test message"));
+  }
+
+  // test notification
+  await wait(1000);
+  assert.equal(3, notifications.length);
+  for (let i = 0; i < 3; i++) {
+    assert(notifications[i].getTimestamp() > 0);
+    assert.equal("Test title", notifications[i].getTitle());
+    assert.equal("Test message", notifications[i].getMessage());
+  }
+});
+
 test("Can get market prices", async () => {
 
   // get all market prices
@@ -784,6 +624,27 @@ test("Can get market prices", async () => {
   await expect(async () => {await alice.getPrice("INVALID_CURRENCY")})
     .rejects
     .toThrow('Currency not found: INVALID_CURRENCY');
+});
+
+test("Can register as dispute agents", async () => {
+  await arbitrator.registerDisputeAgent("mediator", TestConfig.devPrivilegePrivKey);    // TODO: bisq mediator = haveno arbitrator
+  await arbitrator.registerDisputeAgent("refundagent", TestConfig.devPrivilegePrivKey); // TODO: no refund agent in haveno
+  
+  // test bad dispute agent type
+  try {
+    await arbitrator.registerDisputeAgent("unsupported type", TestConfig.devPrivilegePrivKey);
+    throw new Error("should have thrown error registering bad type");
+  } catch (err) {
+    if (err.message !== "unknown dispute agent type 'unsupported type'") throw new Error("Unexpected error: " + err.message);
+  }
+  
+  // test bad key
+  try {
+    await arbitrator.registerDisputeAgent("mediator", "bad key");
+    throw new Error("should have thrown error registering bad key");
+  } catch (err) {
+    if (err.message !== "invalid registration key") throw new Error("Unexpected error: " + err.message);
+  }
 });
 
 test("Can get offers", async () => {
@@ -1246,7 +1107,7 @@ async function initHavenoDaemon(config: any): Promise<HavenoDaemon> {
     await havenod.getVersion();
     return havenod;
   } catch (err) {
-    return startHavenoProcess(config.appName, config.passwordRequired, config.logProcessOutput, config.enableProcessOutput);
+    return startHavenoProcess(config.appName, config.passwordRequired, config.logProcessOutput);
   }
 }
 
@@ -1259,7 +1120,7 @@ async function initHavenoDaemon(config: any): Promise<HavenoDaemon> {
  */
 async function startHavenoProcesses(numProcesses: number, enableLogging: boolean): Promise<HavenoDaemon[]> {
   let traderPromises: Promise<HavenoDaemon>[] = [];
-  for (let i = 0; i < numProcesses; i++) traderPromises.push(startHavenoProcess(undefined, false, enableLogging, false));
+  for (let i = 0; i < numProcesses; i++) traderPromises.push(startHavenoProcess(undefined, false, enableLogging));
   return Promise.all(traderPromises);
 }
 
@@ -1316,7 +1177,7 @@ async function startHavenoProcess(appName: string|undefined, passwordRequired: b
     "--appName", appName,
     "--apiPassword", "apitest",
     "--apiPort", TestConfig.proxyPorts.get(proxyPort)![0],
-    "--walletRpcBindPort", (proxyPort === "8080" ? new URL(TestConfig.alice.walletUrl).port : await getAvailablePort()) + "", // use alice's configured wallet rpc port 
+    "--walletRpcBindPort", (proxyPort === "8080" ? new URL(TestConfig.alice.walletUri).port : await getAvailablePort()) + "", // use alice's configured wallet rpc port 
     "--passwordRequired", (passwordRequired ? "true" : "false")
   ];
   let havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + proxyPort, enableLogging);
