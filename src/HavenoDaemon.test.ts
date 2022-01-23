@@ -27,10 +27,7 @@ const net = require('net');
 
 // test config
 const TestConfig = {
-    logging: {
-        level: 3, // set log level (gets more verbose increasing from 0)
-        logProcessOutput: false, // enable or disable logging process output
-    },
+    logLevel: 3,
     moneroBinsDir: "../haveno/.localnet",
     networkType: monerojs.MoneroNetworkType.STAGENET,
     haveno: {
@@ -54,42 +51,43 @@ const TestConfig = {
         defaultPath: "test_funding_wallet",
         minimumFunding: BigInt("5000000000000")
     },
-    startupDaemons: [{
+    defaultHavenodConfig: {
+        logProcessOutput: true,
+        apiPassword: "apitest",
+        accountPassword: "abctesting789",
+        passwordRequired: true,
+    },
+    startupHavenods: [{
             appName: "haveno-XMR_STAGENET_arbitrator",  // arbritrator
-            logProcessOutput: false,
-            url: "http://localhost:8079",
+            logProcessOutput: true,
+            uri: "http://localhost:8079",
             apiPassword: "apitest",
             accountPassword: "abctesting123",
             walletUsername: "rpc_user",
             walletPassword: "abc123", // TODO (woodser): replace walletPassword with accountPassword
-            passwordRequired: true,
+            passwordRequired: false,
+            proxyPort: 8079 // TODO (woodser): proxy port is already in url, don't be redundant
         }, {
-            logProcessOutput: false,
             appName: "haveno-XMR_STAGENET_alice",       // alice
-            url: "http://localhost:8080",
+            logProcessOutput: false,
+            uri: "http://localhost:8080",
             apiPassword: "apitest",
             accountPassword: "abctesting456",
-            walletUrl: "http://127.0.0.1:38091",
+            walletUri: "http://127.0.0.1:38091",
             walletUsername: "rpc_user",
             walletPassword: "abc123",
-            passwordRequired: true,
+            passwordRequired: false,
+            proxyPort: 8080
         }, {
-            logProcessOutput: false,
             appName: "haveno-XMR_STAGENET_bob",         // bob
-            url: "http://localhost:8081",
+            logProcessOutput: false,
+            uri: "http://localhost:8081",
             apiPassword: "apitest",
             accountPassword: "abctesting789",
-            passwordRequired: true,
+            passwordRequired: false,
+            proxyPort: 8081
         }
     ],
-    account: {
-      logProcessOutput: true,
-      appName: "haveno-XMR_STAGENET_account",
-      url: "http://localhost:8082",
-      password: "apitest",
-      passwordRequired: true,
-      enableProcessOutput: false // Turn on to see output in same console. Account delete may purge logs.
-    },
     maxFee: BigInt("75000000000"),
     walletSyncPeriodMs: 5000, // TODO (woodser): auto adjust higher if using remote connection
     daemonPollPeriodMs: 15000,
@@ -106,7 +104,7 @@ const TestConfig = {
         ["8079", ["9998", "4444"]],  // arbitrator
         ["8080", ["9999", "5555"]],  // alice
         ["8081", ["10000", "6666"]], // bob
-        ["8082", ["10001", "7777"]], // account
+        ["8082", ["10001", "7777"]],
         ["8083", ["10002", "7778"]],
         ["8084", ["10003", "7779"]],
         ["8085", ["10004", "7780"]],
@@ -120,10 +118,10 @@ interface TxContext {
 }
 
 // clients
+let startupHavenods: HavenoDaemon[] = [];
 let arbitrator: HavenoDaemon;
 let alice: HavenoDaemon;
 let bob: HavenoDaemon;
-let account: HavenoDaemon; // reset on each test
 let monerod: any;
 let fundingWallet: any;
 let aliceWallet: any;
@@ -134,29 +132,30 @@ const HAVENO_PROCESS_PORTS: string[] = [];
 
 // -------------------------- BEFORE / AFTER TESTS ----------------------------
 
+jest.setTimeout(500000);
+
 beforeAll(async () => {
   
   // set log level for tests
-  HavenoUtils.setLogLevel(TestConfig.logging.level);
-
+  HavenoUtils.setLogLevel(TestConfig.logLevel);
+  
   // start configured haveno daemons
-  let daemons = [];
   let promises = [];
-  for (let config of TestConfig.startupDaemons) promises.push(initHavenoDaemon(config)); // TODO: refactor to initHavenoDaemon(config: {object}), startHavenoDaemons(config: {object}, numProcesses: number)
+  for (let config of TestConfig.startupHavenods) promises.push(initHavenoDaemon(config));
   for (let settledPromise of await Promise.allSettled(promises)) {
     if (settledPromise.status !== "fulfilled") throw new Error((settledPromise as PromiseRejectedResult).reason);
-    daemons.push((settledPromise as PromiseFulfilledResult<HavenoDaemon>).value);
+    startupHavenods.push((settledPromise as PromiseFulfilledResult<HavenoDaemon>).value);
   }
   
   // create or open accounts
   promises = [];
-  for (let i = 0; i < TestConfig.startupDaemons.length; i++) promises.push(initAccount(daemons[i], TestConfig.startupDaemons[i].accountPassword));
+  for (let i = 0; i < TestConfig.startupHavenods.length; i++) promises.push(initAccount(startupHavenods[i], TestConfig.startupHavenods[i].accountPassword));
   await Promise.all(promises);
-
+  
   // assign arbitrator alice, bob
-  arbitrator = daemons[0];
-  alice = daemons[1];
-  bob = daemons[2];
+  arbitrator = startupHavenods[0];
+  alice = startupHavenods[1];
+  bob = startupHavenods[2];
   
   // register arbitrator as dispute agents
   await arbitrator.registerDisputeAgent("mediator", TestConfig.devPrivilegePrivKey);
@@ -164,11 +163,11 @@ beforeAll(async () => {
 
   // connect monero clients
   monerod = await monerojs.connectToDaemonRpc(TestConfig.monerod.uri, TestConfig.monerod.username, TestConfig.monerod.password);
-  aliceWallet = await monerojs.connectToWalletRpc(TestConfig.startupDaemons[1].walletUrl, TestConfig.startupDaemons[1].walletUsername, TestConfig.startupDaemons[1].walletPassword);
+  aliceWallet = await monerojs.connectToWalletRpc(TestConfig.startupHavenods[1].walletUri, TestConfig.startupHavenods[1].walletUsername, TestConfig.startupHavenods[1].walletPassword);
   
   // initialize funding wallet
   await initFundingWallet();
-
+  
   // debug tools
   //for (let offer of await alice.getMyOffers("BUY")) await alice.removeOffer(offer.getId());
   //for (let offer of await alice.getMyOffers("SELL")) await alice.removeOffer(offer.getId());
@@ -180,24 +179,11 @@ beforeEach(async() => {
   console.log("Before test \"" + expect.getState().currentTestName + "\"");
 });
 
-afterEach(async() => {
-  let stopPromises = [];
-  if (arbitrator && arbitrator.getProcess()) stopPromises.push(stopHavenoProcess(arbitrator));
-  if (alice && alice.getProcess()) stopPromises.push(stopHavenoProcess(alice));
-  if (bob && bob.getProcess()) stopPromises.push(stopHavenoProcess(bob));
-  return Promise.all(stopPromises);
-});
-
 afterAll(async () => {
-  let stopPromises = [];
-  if (arbitrator && arbitrator.getProcess()) stopPromises.push(stopHavenoProcess(arbitrator));
-  if (alice && alice.getProcess()) stopPromises.push(stopHavenoProcess(alice));
-  if (bob && bob.getProcess()) stopPromises.push(stopHavenoProcess(bob));
-  return Promise.all(stopPromises);
+  let promises = [];
+  for (let havenod of startupHavenods) if (havenod.getProcess()) promises.push(stopHavenoProcess(havenod));
+  return Promise.all(promises);
 });
-
-jest.setTimeout(500000);
-
 
 // ----------------------------------- TESTS ----------------------------------
 
@@ -212,7 +198,7 @@ test("Can manage an account", async () => {
   try {
 
     // start charlie
-    charlie = await startHavenoProcess(undefined, true, TestConfig.logging.logProcessOutput);
+    charlie = await initHavenoDaemon();
     assert(!await charlie.accountExists());
     
     // create account
@@ -230,7 +216,7 @@ test("Can manage an account", async () => {
   if (err) throw err;
 });
 
-test("Haveno account create", async () => {
+/*test("Haveno account create", async () => {
   let daemon = account;
   console.log("test 1");
 
@@ -357,7 +343,7 @@ test("Haveno account restore", async() => {
   await account.openAccount(password);
   let opened = await account.isAccountOpen();
   assert(opened);
-});
+});*/
 
 test("Can manage Monero daemon connections", async () => {
   let monerod2: any;
@@ -366,7 +352,8 @@ test("Can manage Monero daemon connections", async () => {
   try {
 
     // start charlie
-    charlie = await startHavenoProcess(undefined, false, TestConfig.logging.logProcessOutput);
+    charlie = await initHavenoDaemon();
+    await initAccount(charlie, "testPassword");
 
     // test default connections
     let monerodUri1 = "http://localhost:38081"; // TODO: (woodser): move to config
@@ -433,7 +420,7 @@ test("Can manage Monero daemon connections", async () => {
     // restart charlie
     let appName = charlie.getAppName();
     await stopHavenoProcess(charlie);
-    charlie = await startHavenoProcess(appName, false, TestConfig.logging.logProcessOutput);
+    charlie = await initHavenoDaemon({appName: appName});
 
     // connection is restored, online, and authenticated
     connection = await charlie.getMoneroConnection();
@@ -806,7 +793,7 @@ test("Handles unexpected errors during trade initialization", async () => {
     
     // start and fund 3 trader processes
     console.log("Starting trader processes");
-    traders = await startHavenoProcesses(3, TestConfig.logging.logProcessOutput);
+    traders = await initHavenoDaemons(3);
     console.log("Funding traders");
     let tradeAmount: bigint = BigInt("250000000000");
     await waitForUnlockedBalance(tradeAmount * BigInt("2"), traders[0], traders[1], traders[2]);
@@ -898,7 +885,7 @@ test("Cannot make or take offer with insufficient unlocked funds", async () => {
   try {
     
     // start charlie
-    charlie = await startHavenoProcess(undefined, false, TestConfig.logging.logProcessOutput);
+    charlie = await initHavenoDaemon();
     
     // charlie creates ethereum payment account
     let paymentAccount = await createCryptoPaymentAccount(charlie);
@@ -1095,65 +1082,15 @@ function testConnection(connection: UriConnection, uri?: string, onlineStatus?: 
   if (priority !== undefined) assert.equal(connection.getPriority(), priority);
 }
 
-/**
- * Initialize Haveno daemon by configuration.
- * 
- * @param {object} config - for arbitrator, alice, or bob
- * @return {HavenoDaemon} the created instance
- */
-async function initHavenoDaemon(config: any): Promise<HavenoDaemon> {
-  try {
-    let havenod = new HavenoDaemon(config.uri, config.password);
-    await havenod.getVersion();
-    return havenod;
-  } catch (err) {
-    return startHavenoProcess(config.appName, config.passwordRequired, config.logProcessOutput);
-  }
-}
-
-/**
- * Start Haveno daemons as processes.
- * 
- * @param {number} numProcesses - number of trader processes to start
- * @param {boolean} enableLogging - specifies if process output should be logged
- * @return {HavenoDaemon[]} clients connected to the started Haveno processes
- */
-async function startHavenoProcesses(numProcesses: number, enableLogging: boolean): Promise<HavenoDaemon[]> {
+async function initHavenoDaemons(numDaemons: number, config?: any) {
   let traderPromises: Promise<HavenoDaemon>[] = [];
-  for (let i = 0; i < numProcesses; i++) traderPromises.push(startHavenoProcess(undefined, false, enableLogging));
+  for (let i = 0; i < numDaemons; i++) traderPromises.push(config);
   return Promise.all(traderPromises);
 }
 
-/**
- * Start a Haveno daemon as a process.
- *
- * If the appName belongs to the arbitrator, alice, or bob, the process is started using their configured ports. 
- * 
- * @param {string|undefined} appName - the app folder name (default to name with unique id)
- * @param {boolean} passwordRequired - forces process to require login on startup
- * @param {boolean} enableLogging - specifies if process output should be logged
- * @return {HavenoDaemon} the client connected to the started Haveno process
- */
-async function startHavenoProcess(appName: string|undefined, passwordRequired: boolean, enableLogging: boolean): Promise<HavenoDaemon> {
-  if (!appName) appName = "haveno-XMR_STAGENET_instance_" + GenUtils.getUUID();
-  
-  // get proxy port for haveno process
-  let proxyPort;
-  if (appName === TestConfig.arbitrator.appName) proxyPort = "8079";
-  else if (appName === TestConfig.alice.appName) proxyPort = "8080"; 
-  else if (appName === TestConfig.bob.appName) proxyPort = "8081";
-  else if (appName === TestConfig.account.appName) proxyPort = "8082";
-  else {
-    for (let port of Array.from(TestConfig.proxyPorts.keys())) {
-      if (port === "8079" || port === "8080" || port === "8081" || port === "8082") continue; // reserved for arbitrator, alice, bob, and account
-      if (!GenUtils.arrayContains(HAVENO_PROCESS_PORTS, port)) {
-        HAVENO_PROCESS_PORTS.push(port);
-        proxyPort = port;
-        break;
-      }
-    }
-  }
-  if (!proxyPort) throw new Error("No unused test ports available");
+async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
+  config = Object.assign({}, TestConfig.defaultHavenodConfig, config);
+  if (!config.appName) config.appName = "haveno-XMR_STAGENET_instance_" + GenUtils.getUUID();
   
   async function getAvailablePort(): Promise<number> {
     return new Promise(function(resolve, reject) {
@@ -1162,27 +1099,49 @@ async function startHavenoProcess(appName: string|undefined, passwordRequired: b
         let port = srv.address().port;
         srv.close(function() {
           resolve(port);
-        })
+        });
       });
     });
   }
   
-  // start haveno process using configured ports if available
-  let cmd: string[] = [
-    "./haveno-daemon",
-    "--baseCurrencyNetwork", "XMR_STAGENET",
-    "--useLocalhostForP2P", "true",
-    "--useDevPrivilegeKeys", "true",
-    "--nodePort", TestConfig.proxyPorts.get(proxyPort)![1],
-    "--appName", appName,
-    "--apiPassword", "apitest",
-    "--apiPort", TestConfig.proxyPorts.get(proxyPort)![0],
-    "--walletRpcBindPort", (proxyPort === "8080" ? new URL(TestConfig.alice.walletUri).port : await getAvailablePort()) + "", // use alice's configured wallet rpc port 
-    "--passwordRequired", (passwordRequired ? "true" : "false")
-  ];
-  let havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + proxyPort, enableLogging);
-  HAVENO_PROCESSES.push(havenod);
-  return havenod;
+  try {
+    
+    // try to connect to existing server
+    let havenod = new HavenoDaemon(config.uri, config.apiPassword);
+    await havenod.getVersion();
+    return havenod;
+  } catch (err) {
+    
+    // get proxy port for haveno process
+    if (!config.proxyPort) {
+      for (let port of Array.from(TestConfig.proxyPorts.keys())) {
+        if (port === "8079" || port === "8080" || port === "8081") continue; // reserved for arbitrator, alice, and bob
+        if (!GenUtils.arrayContains(HAVENO_PROCESS_PORTS, port)) {
+          HAVENO_PROCESS_PORTS.push(port);
+          config.proxyPort = port;
+          break;
+        }
+      }
+    }
+    if (!config.proxyPort) throw new Error("No unused test ports available");
+    
+    // start haveno process using configured ports if available
+    let cmd: string[] = [
+      "./haveno-daemon",
+      "--baseCurrencyNetwork", "XMR_STAGENET",
+      "--useLocalhostForP2P", "true",
+      "--useDevPrivilegeKeys", "true",
+      "--nodePort", TestConfig.proxyPorts.get("" + config.proxyPort)![1],
+      "--appName", config.appName,
+      "--apiPassword", "apitest",
+      "--apiPort", TestConfig.proxyPorts.get("" + config.proxyPort)![0],
+      "--walletRpcBindPort", "" + (config.walletUri ? new URL(config.walletUri).port : await getAvailablePort()), // use alice's configured wallet rpc port 
+      "--passwordRequired", (config.passwordRequired ? "true" : "false")
+    ];
+    let havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + config.proxyPort, config.logProcessOutput);
+    HAVENO_PROCESSES.push(havenod);
+    return havenod;
+  }
 }
 
 /**
@@ -1200,7 +1159,8 @@ async function stopHavenoProcess(havenod: HavenoDaemon) {
 async function initAccount(havenod: HavenoDaemon, password: string) {
   if (await havenod.isAccountOpen()) return;
   if (await havenod.accountExists()) return havenod.openAccount(password);
-  return havenod.createAccount(password);
+  await havenod.createAccount(password);
+  return;
 }
 
 /**

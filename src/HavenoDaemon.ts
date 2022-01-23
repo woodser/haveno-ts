@@ -41,9 +41,9 @@ class HavenoDaemon {
    * @param {string} password - Haveno daemon password
    */
   constructor(url: string, password: string) {
-    HavenoUtils.log(2, "Creating HavenoDaemon(" + url + ", " + password + ")");
     if (!url) throw new Error("Must provide URL of Haveno daemon");
     if (!password) throw new Error("Must provide password of Haveno daemon");
+    HavenoUtils.log(2, "Creating HavenoDaemon(" + url + ", " + password + ")");
     this._url = url;
     this._password = password;
     this._getVersionClient = new GetVersionClient(this._url);
@@ -72,7 +72,7 @@ class HavenoDaemon {
     
     // return promise which resolves after starting havenod
     return new Promise(function(resolve, reject) {
-      HavenoUtils.log(2, "Starting Haveno process: " + cmd + " on proxy url: " + url);
+      HavenoUtils.log(2, "Starting Haveno process: " + cmd + " on proxy uri: " + url);
       
       // state variables
       let output = "";
