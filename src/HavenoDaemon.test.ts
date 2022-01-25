@@ -149,7 +149,7 @@ beforeAll(async () => {
   
   // create or open accounts
   promises = [];
-  for (let i = 0; i < TestConfig.startupHavenods.length; i++) promises.push(initAccount(startupHavenods[i], TestConfig.startupHavenods[i].accountPassword));
+  for (let i = 0; i < TestConfig.startupHavenods.length; i++) promises.push(initHavenoAccount(startupHavenods[i], TestConfig.startupHavenods[i].accountPassword));
   await Promise.all(promises);
   
   // assign arbitrator alice, bob
@@ -158,6 +158,8 @@ beforeAll(async () => {
   bob = startupHavenods[2];
   
   // register arbitrator as dispute agents
+  console.log("accounts created, waiting for applications to fully initialize");
+  await wait(10000); // TODO: need to wait for "appliction is fully initialized" but p2p not ready
   await arbitrator.registerDisputeAgent("mediator", TestConfig.devPrivilegePrivKey);
   await arbitrator.registerDisputeAgent("refundagent", TestConfig.devPrivilegePrivKey);
 
@@ -192,6 +194,7 @@ test("Can get the version", async () => {
   expect(version).toEqual(TestConfig.haveno.version);
 });
 
+// TODO: test wrong passwords
 test("Can manage an account", async () => {
   let charlie: HavenoDaemon | undefined;
   let err: any;
@@ -201,11 +204,79 @@ test("Can manage an account", async () => {
     charlie = await initHavenoDaemon();
     assert(!await charlie.accountExists());
     
+    // test errors when account not open
+    await testAccountNotOpenErrors(charlie);
+    
+    console.log("tezt 1");
+    
     // create account
     let password = "testPassword";
     await charlie.createAccount(password);
     assert(await charlie.accountExists());
     assert(await charlie.isAccountOpen());
+    
+    console.log("tezt 2");
+    
+    // close account
+    await charlie.closeAccount();
+    assert(await charlie.accountExists());
+    assert(!await charlie.isAccountOpen());
+    await testAccountNotOpenErrors(charlie);
+    
+    console.log("tezt 3");
+    
+    // open account
+    await charlie.openAccount(password);
+    assert(await charlie.accountExists());
+    assert(await charlie.isAccountOpen());
+    
+    console.log("tezt 4");
+    
+    // restart charlie
+    let appName = charlie.getAppName();
+    await stopHavenoProcess(charlie); // TODO: seeing that application not flushing to disk because it's not yet initialized, should be initialized
+    charlie = await initHavenoDaemon({appName: appName});
+    assert(await charlie.accountExists());
+    assert(!await charlie.isAccountOpen());
+    
+    console.log("tezt 4.1");
+    
+    // open account
+    await charlie.openAccount(password);
+    console.log("tezt 5");
+    assert(await charlie.accountExists());
+    console.log("tezt 6");
+    assert(await charlie.isAccountOpen());
+    console.log("tezt 7");
+    
+    // change password
+    password = "newPassword";
+    await charlie.changePassword(password);
+    assert(await charlie.accountExists());
+    assert(await charlie.isAccountOpen());
+    
+    console.log("tezt 8");
+    
+    // restart charlie
+    await stopHavenoProcess(charlie);
+    charlie = await initHavenoDaemon({appName: appName});
+    
+    console.log("tezt 9");
+    
+    // open account
+    await charlie.openAccount(password);
+    console.log("tezt 10");
+    assert(await charlie.accountExists());
+    console.log("tezt 11");
+    assert(await charlie.isAccountOpen());
+    console.log("tezt 12");
+    
+    // test backup and restore // TODO
+    
+    // close account
+    assert(await charlie.accountExists());
+    assert(!await charlie.isAccountOpen());
+    await testAccountNotOpenErrors(charlie);
   } catch (err2) {
     err = err2;
   }
@@ -215,6 +286,10 @@ test("Can manage an account", async () => {
   // TODO: how to delete trader app folder at end of test?
   if (err) throw err;
 });
+
+async function testAccountNotOpenErrors(havenod: HavenoDaemon): Promise<void> {
+    //throw new Error("Not implemented");
+}
 
 /*test("Haveno account create", async () => {
   let daemon = account;
@@ -353,7 +428,7 @@ test("Can manage Monero daemon connections", async () => {
 
     // start charlie
     charlie = await initHavenoDaemon();
-    await initAccount(charlie, "testPassword");
+    await initHavenoAccount(charlie, "testPassword");
 
     // test default connections
     let monerodUri1 = "http://localhost:38081"; // TODO: (woodser): move to config
@@ -1156,7 +1231,7 @@ async function stopHavenoProcess(havenod: HavenoDaemon) {
 /**
  * Create or open an account with the given daemon and password.
  */
-async function initAccount(havenod: HavenoDaemon, password: string) {
+async function initHavenoAccount(havenod: HavenoDaemon, password: string) {
   if (await havenod.isAccountOpen()) return;
   if (await havenod.accountExists()) return havenod.openAccount(password);
   await havenod.createAccount(password);
