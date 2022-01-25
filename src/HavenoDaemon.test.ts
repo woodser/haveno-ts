@@ -274,6 +274,7 @@ test("Can manage an account", async () => {
     // test backup and restore // TODO
     
     // close account
+    await charlie.closeAccount();
     assert(await charlie.accountExists());
     assert(!await charlie.isAccountOpen());
     await testAccountNotOpenErrors(charlie);
@@ -420,6 +421,7 @@ test("Haveno account restore", async() => {
   assert(opened);
 });*/
 
+// TODO: test changing account password
 test("Can manage Monero daemon connections", async () => {
   let monerod2: any;
   let charlie: HavenoDaemon | undefined;
