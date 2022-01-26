@@ -158,8 +158,6 @@ beforeAll(async () => {
   bob = startupHavenods[2];
   
   // register arbitrator as dispute agents
-  console.log("accounts created, waiting for applications to fully initialize");
-  await wait(10000); // TODO: need to wait for "appliction is fully initialized" but p2p not ready
   await arbitrator.registerDisputeAgent("mediator", TestConfig.devPrivilegePrivKey);
   await arbitrator.registerDisputeAgent("refundagent", TestConfig.devPrivilegePrivKey);
 

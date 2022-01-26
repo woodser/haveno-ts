@@ -2,7 +2,7 @@ import {HavenoUtils} from "./utils/HavenoUtils";
 import {TaskLooper} from "./utils/TaskLooper";
 import * as grpcWeb from 'grpc-web';
 import {GetVersionClient, AccountClient, MoneroConnectionsClient, DisputeAgentsClient, NotificationsClient, WalletsClient, PriceClient, OffersClient, PaymentAccountsClient, TradesClient, ShutdownServerClient} from './protobuf/GrpcServiceClientPb';
-import {GetVersionRequest, GetVersionReply, RegisterDisputeAgentRequest, MarketPriceRequest, MarketPriceReply, MarketPricesRequest, MarketPricesReply, MarketPriceInfo, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetTradesRequest, GetTradesReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest, XmrTx, GetXmrTxsRequest, GetXmrTxsReply, XmrDestination, CreateXmrTxRequest, CreateXmrTxReply, RelayXmrTxRequest, RelayXmrTxReply, CreateAccountRequest, AccountExistsRequest, AccountExistsReply, DeleteAccountRequest, OpenAccountRequest, IsAccountOpenRequest, IsAccountOpenReply, CloseAccountRequest, ChangePasswordRequest, BackupAccountRequest, BackupAccountReply, RestoreAccountRequest, StopRequest, NotificationMessage, RegisterNotificationListenerRequest, SendNotificationRequest, UriConnection, AddConnectionRequest, RemoveConnectionRequest, GetConnectionRequest, GetConnectionsRequest, SetConnectionRequest, CheckConnectionRequest, CheckConnectionsReply, CheckConnectionsRequest, StartCheckingConnectionsRequest, StopCheckingConnectionsRequest, GetBestAvailableConnectionRequest, SetAutoSwitchRequest, CheckConnectionReply, GetConnectionsReply, GetConnectionReply, GetBestAvailableConnectionReply} from './protobuf/grpc_pb';
+import {GetVersionRequest, GetVersionReply, IsAppInitializedRequest, IsAppInitializedReply, RegisterDisputeAgentRequest, MarketPriceRequest, MarketPriceReply, MarketPricesRequest, MarketPricesReply, MarketPriceInfo, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetTradesRequest, GetTradesReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest, XmrTx, GetXmrTxsRequest, GetXmrTxsReply, XmrDestination, CreateXmrTxRequest, CreateXmrTxReply, RelayXmrTxRequest, RelayXmrTxReply, CreateAccountRequest, AccountExistsRequest, AccountExistsReply, DeleteAccountRequest, OpenAccountRequest, IsAccountOpenRequest, IsAccountOpenReply, CloseAccountRequest, ChangePasswordRequest, BackupAccountRequest, BackupAccountReply, RestoreAccountRequest, StopRequest, NotificationMessage, RegisterNotificationListenerRequest, SendNotificationRequest, UriConnection, AddConnectionRequest, RemoveConnectionRequest, GetConnectionRequest, GetConnectionsRequest, SetConnectionRequest, CheckConnectionRequest, CheckConnectionsReply, CheckConnectionsRequest, StartCheckingConnectionsRequest, StopCheckingConnectionsRequest, GetBestAvailableConnectionRequest, SetAutoSwitchRequest, CheckConnectionReply, GetConnectionsReply, GetConnectionReply, GetBestAvailableConnectionReply} from './protobuf/grpc_pb';
 import {PaymentAccount, AvailabilityResult} from './protobuf/pb_pb';
 const console = require('console');
 
@@ -238,9 +238,8 @@ class HavenoDaemon {
    */
   async accountExists(): Promise<boolean> {
     let that = this;
-    let request = new AccountExistsRequest();
     return new Promise(function(resolve, reject) {
-      that._accountClient.accountExists(request, {password: that._password}, function(err: grpcWeb.RpcError, response: AccountExistsReply) {
+      that._accountClient.accountExists(new AccountExistsRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: AccountExistsReply) {
         if (err) reject(err);
         else resolve(response.getAccountExists());
       });
@@ -254,9 +253,8 @@ class HavenoDaemon {
    */
   async isAccountOpen(): Promise<boolean> {
     let that = this;
-    let request = new IsAccountOpenRequest();
     return new Promise(function(resolve, reject) {
-      that._accountClient.isAccountOpen(request, {password: that._password}, function(err: grpcWeb.RpcError, response: IsAccountOpenReply) {
+      that._accountClient.isAccountOpen(new IsAccountOpenRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: IsAccountOpenReply) {
         if (err) reject(err);
         else resolve(response.getIsAccountOpen());
       });
@@ -270,13 +268,13 @@ class HavenoDaemon {
    */
   async createAccount(password: string): Promise<void> {
     let that = this;
-    let request = new CreateAccountRequest().setPassword(password);
-    return new Promise(function(resolve, reject) {
-      that._accountClient.createAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+    await new Promise(function(resolve, reject) {
+      that._accountClient.createAccount(new CreateAccountRequest().setPassword(password), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
     });
+    return this._awaitAppInitialized(); // TODO: grpc should not return before setup is complete
   }
   
   /**
@@ -286,13 +284,13 @@ class HavenoDaemon {
    */
   async openAccount(password: string): Promise<void> {
     let that = this;
-    let request = new OpenAccountRequest().setPassword(password);
-    return new Promise(function(resolve, reject) {
-      that._accountClient.openAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+    await new Promise(function(resolve, reject) {
+      that._accountClient.openAccount(new OpenAccountRequest().setPassword(password), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
     });
+    return this._awaitAppInitialized(); // TODO: grpc should not return before setup is complete
   }
   
   /**
@@ -302,9 +300,8 @@ class HavenoDaemon {
    */
   async changePassword(password: string): Promise<void> {
     let that = this;
-    let request = new ChangePasswordRequest().setPassword(password);
     return new Promise(function(resolve, reject) {
-      that._accountClient.changePassword(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._accountClient.changePassword(new ChangePasswordRequest().setPassword(password), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
@@ -316,9 +313,8 @@ class HavenoDaemon {
    */
   async closeAccount(): Promise<void> {
     let that = this;
-    let request = new CloseAccountRequest();
     return new Promise(function(resolve, reject) {
-      that._accountClient.closeAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._accountClient.closeAccount(new CloseAccountRequest(), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
@@ -330,9 +326,8 @@ class HavenoDaemon {
    */
   async deleteAccount(): Promise<void> {
     let that = this;
-    let request = new DeleteAccountRequest();
     return new Promise(function(resolve, reject) {
-      that._accountClient.deleteAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._accountClient.deleteAccount(new DeleteAccountRequest(), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else {
           setTimeout(resolve, 5000); // delete needs to wait for process to shutdown. improve this to be more accurate
@@ -346,10 +341,9 @@ class HavenoDaemon {
    */
   async backupAccount(stream: any): Promise<number> {
     let that = this;
-    let request = new BackupAccountRequest();
     return new Promise(function(resolve, reject) {
       let total = 0;
-      let response = that._accountClient.backupAccount(request, {password: that._password});
+      let response = that._accountClient.backupAccount(new BackupAccountRequest(), {password: that._password});
       response.on('data', (chunk) => {
         let bytes = (chunk as BackupAccountReply).getZipBytes(); // TODO: right api?
         total += bytes.length;
@@ -941,6 +935,46 @@ class HavenoDaemon {
   }
 
   // ------------------------------- HELPERS ----------------------------------
+  
+  /**
+   * Wait for the application to be fully initialized with an account and a
+   * connection to the Haveno network.
+   * 
+   * TODO:
+   *  
+   * Currently when the application starts, the account is first initialized with createAccount()
+   * or openAccount() which return immediately. A notification is sent after all setup is complete and
+   * the application is connected to the Haveno network.
+   * 
+   * Ideally when the application starts, the system checks the Haveno network connection, supporting
+   * havenod.isHavenoConnectionInitialized() and havenod.awaitHavenoConnectionInitialized().
+   * Independently, gRPC createAccount() and openAccount() return after all account setup and reading from disk.
+   */
+  async _awaitAppInitialized(): Promise<void> {
+    let that = this;
+    return new Promise(async function(resolve) {
+      await that.addNotificationListener(notification => {
+        if (notification.getType() === NotificationMessage.NotificationType.APP_INITIALIZED) {
+            console.log("RECEIVED NOTIFICATION THAT APP INITIALIZED!");
+            resolve(); // TODO: might resolve twice?
+        }
+      });
+      if (await that._isAppInitialized()) {
+        console.log("app fully initialized according to grpc api!");
+        resolve();
+      }
+    });
+  }
+  
+  async _isAppInitialized(): Promise<boolean> {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._accountClient.isAppInitialized(new IsAppInitializedRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: IsAppInitializedReply) {
+        if (err) reject(err);
+        else resolve(response.getIsAppInitialized());
+      });
+    });
+  }
 
   /**
    * Register a listener to receive notifications.
