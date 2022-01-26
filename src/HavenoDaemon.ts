@@ -158,14 +158,18 @@ class HavenoDaemon {
   }
   
   /**
-   * Stop a previously started Haveno process.
+   * Shutdown the Haveno daemon server.
    */
-  async stopProcess(): Promise<void> {
-    if (this._process === undefined) {
-      // Use stop rpc if we don't own the process.
-      return this.shutdownServer();
-    }
-    return HavenoUtils.kill(this._process);
+  async shutdownServer() {
+    let that = this;
+    let request = new StopRequest();
+    await new Promise(function(resolve, reject) {
+      that._shutdownServerClient.stop(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    if (this._process) HavenoUtils.kill(this._process); // stop process if started
   }
   
   /**
@@ -228,22 +232,161 @@ class HavenoDaemon {
   }
   
   /**
-   * Register as a dispute agent.
+   * Indicates if the Haveno account is created.
    * 
-   * @param {string} disputeAgentType - type of dispute agent to register, e.g. mediator, refundagent
-   * @param {string} registrationKey - registration key
+   * @return {boolean} true if the account is created, false otherwise
    */
-  async registerDisputeAgent(disputeAgentType: string, registrationKey: string): Promise<void> {
+  async accountExists(): Promise<boolean> {
     let that = this;
-    let request = new RegisterDisputeAgentRequest()
-        .setDisputeAgentType(disputeAgentType)
-        .setRegistrationKey(registrationKey);
+    let request = new AccountExistsRequest();
     return new Promise(function(resolve, reject) {
-      that._disputeAgentsClient.registerDisputeAgent(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._accountClient.accountExists(request, {password: that._password}, function(err: grpcWeb.RpcError, response: AccountExistsReply) {
+        if (err) reject(err);
+        else resolve(response.getAccountExists());
+      });
+    });
+  }
+  
+  /**
+   * Indicates if the Haveno account is open and authenticated with the correct password.
+   * 
+   * @return {boolean} true if the account is open and authenticated, false otherwise
+   */
+  async isAccountOpen(): Promise<boolean> {
+    let that = this;
+    let request = new IsAccountOpenRequest();
+    return new Promise(function(resolve, reject) {
+      that._accountClient.isAccountOpen(request, {password: that._password}, function(err: grpcWeb.RpcError, response: IsAccountOpenReply) {
+        if (err) reject(err);
+        else resolve(response.getIsAccountOpen());
+      });
+    });
+  }
+  
+  /**
+   * Create and open a new Haveno account.
+   * 
+   * @param {string} password - the password to encrypt the account
+   */
+  async createAccount(password: string): Promise<void> {
+    let that = this;
+    let request = new CreateAccountRequest().setPassword(password);
+    return new Promise(function(resolve, reject) {
+      that._accountClient.createAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
     });
+  }
+  
+  /**
+   * Open existing Haveno account.
+   * 
+   * @param {string} password - the account password
+   */
+  async openAccount(password: string): Promise<void> {
+    let that = this;
+    let request = new OpenAccountRequest().setPassword(password);
+    return new Promise(function(resolve, reject) {
+      that._accountClient.openAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  
+  /**
+   * Change the Haveno account password.
+   * 
+   * @param {string} password - the new account password
+   */
+  async changePassword(password: string): Promise<void> {
+    let that = this;
+    let request = new ChangePasswordRequest().setPassword(password);
+    return new Promise(function(resolve, reject) {
+      that._accountClient.changePassword(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  
+  /**
+   * Close the currently open account.
+   */
+  async closeAccount(): Promise<void> {
+    let that = this;
+    let request = new CloseAccountRequest();
+    return new Promise(function(resolve, reject) {
+      that._accountClient.closeAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  
+  /**
+   * Permanently delete the Haveno account.
+   */
+  async deleteAccount(): Promise<void> {
+    let that = this;
+    let request = new DeleteAccountRequest();
+    return new Promise(function(resolve, reject) {
+      that._accountClient.deleteAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else {
+          setTimeout(resolve, 5000); // delete needs to wait for process to shutdown. improve this to be more accurate
+        }
+      });
+    });
+  }
+  
+  /**
+   * Backup the account to the given stream. TODO: stream type?
+   */
+  async backupAccount(stream: any): Promise<number> {
+    let that = this;
+    let request = new BackupAccountRequest();
+    return new Promise(function(resolve, reject) {
+      let total = 0;
+      let response = that._accountClient.backupAccount(request, {password: that._password});
+      response.on('data', (chunk) => {
+        let bytes = (chunk as BackupAccountReply).getZipBytes(); // TODO: right api?
+        total += bytes.length;
+        console.log("Got a chunk of bytes, total:", total);
+        stream.write(bytes);
+      });
+      response.on('error', function(err) {
+        if(err) reject(err);
+      });
+      response.on('end', function() {
+        resolve(total);
+      });
+    });
+  }
+  
+  /**
+   * Restore the account from zip bytes.
+   *
+   * Sends chunked requests if size over max grpc envelope size (41943404 bytes).
+   * 
+   * @param {Uint8Array} zipBytes - the bytes of the zipped account to restore
+   */
+  async restoreAccount(zipBytes: Uint8Array): Promise<void> {
+    let totalLength = zipBytes.byteLength;
+    let offset = 0;
+    let chunkSize = 4000000; // the max frame size is 4194304 but leave room for http headers
+    let hasMore = true;
+    while (true) {
+      if (zipBytes.byteLength <= offset + 1) return;
+      if (zipBytes.byteLength <= offset + chunkSize) {
+        chunkSize = zipBytes.byteLength - offset - 1;
+        hasMore = false;
+      }
+      let subArray = zipBytes.subarray(offset, offset + chunkSize);
+      await this._restoreAccountChunk(subArray, offset, totalLength, hasMore);
+      offset += chunkSize;
+    }
   }
   
   /**
@@ -428,7 +571,26 @@ class HavenoDaemon {
       });
     });
   }
-
+  
+  /**
+   * Register as a dispute agent.
+   * 
+   * @param {string} disputeAgentType - type of dispute agent to register, e.g. mediator, refundagent
+   * @param {string} registrationKey - registration key
+   */
+  async registerDisputeAgent(disputeAgentType: string, registrationKey: string): Promise<void> {
+    let that = this;
+    let request = new RegisterDisputeAgentRequest()
+        .setDisputeAgentType(disputeAgentType)
+        .setRegistrationKey(registrationKey);
+    return new Promise(function(resolve, reject) {
+      that._disputeAgentsClient.registerDisputeAgent(request, {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  
   /**
    * Get the user's balances.
    * 
@@ -831,167 +993,9 @@ class HavenoDaemon {
   }
 
   /**
-   * Indicates if the Haveno account is created.
-   * @returns - true if the account was created.
+   * Restore an account chunk from zip bytes.
    */
-  async accountExists(): Promise<boolean> {
-    let that = this;
-    let request = new AccountExistsRequest();
-    return new Promise(function(resolve, reject) {
-      that._accountClient.accountExists(request, {password: that._password}, function(err: grpcWeb.RpcError, response: AccountExistsReply) {
-        if (err) reject(err);
-        else resolve(response.getAccountExists());
-      });
-    });
-  }
-
-  /**
-   * Backup the account to a zip file.
-   */
-  async backupAccount(stream: any): Promise<number> {
-    let that = this;
-    let request = new BackupAccountRequest();
-    return new Promise(function(resolve, reject) {
-      let total = 0;
-      let response = that._accountClient.backupAccount(request, {password: that._password});
-      response.on('data', (chunk) => {
-        let bytes = (chunk as BackupAccountReply).getZipBytes();
-        total += bytes.length;
-        console.log("Got a chunk of bytes, total:", total);
-        stream.write(bytes);
-      });
-      response.on('error', function(err) {
-        if(err) reject(err);
-      });
-      response.on('end', function() {
-        resolve(total);
-      });
-    });
-  }
-
-  /**
-   * Change the Haveno account password.
-   * @param password - the new password.
-   */
-  async changePassword(password: string): Promise<void> {
-    let that = this;
-    let request = new ChangePasswordRequest().setPassword(password);
-    return new Promise(function(resolve, reject) {
-      that._accountClient.changePassword(request, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-
-  /**
-   * Close the currently open account.
-   */
-  async closeAccount(): Promise<void> {
-    let that = this;
-    let request = new CloseAccountRequest();
-    return new Promise(function(resolve, reject) {
-      that._accountClient.closeAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-
-  /**
-   * Create and open a new Haveno account.
-   * @param password - the password required to open the account.
-   */
-  async createAccount(password: string): Promise<void> {
-    let that = this;
-    let request = new CreateAccountRequest().setPassword(password);
-    return new Promise(function(resolve, reject) {
-      that._accountClient.createAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-  
-  /**
-   * 	Permanently delete the Haveno account.
-   */
-  async deleteAccount(): Promise<void> {
-    let that = this;
-    let request = new DeleteAccountRequest();
-    return new Promise(function(resolve, reject) {
-      that._accountClient.deleteAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else {
-          // Delete needs to wait for process to shutdown. Should improve this to be more accurate.
-          setTimeout(resolve, 5000);
-        }
-      });
-    });
-  }
-
-  /**
-   * Indicates if the Haveno account is open and authenticated with the correct password.
-   * @returns - true if account is open.
-   */
-  async isAccountOpen(): Promise<boolean> {
-    let that = this;
-    let request = new IsAccountOpenRequest();
-    return new Promise(function(resolve, reject) {
-      that._accountClient.isAccountOpen(request, {password: that._password}, function(err: grpcWeb.RpcError, response: IsAccountOpenReply) {
-        if (err) reject(err);
-        else resolve(response.getIsAccountOpen());
-      });
-    });
-  }
-
-  /**
-   * Open existing account.
-   * @param password - the account password.
-   */
-  async openAccount(password: string): Promise<void> {
-    let that = this;
-    let request = new OpenAccountRequest().setPassword(password);
-    return new Promise(function(resolve, reject) {
-      that._accountClient.openAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-
-  /**
-   * Restore the account from a zip file. Sents in chunked requests if size is over 4194304, max grpc envelope size.
-   */
-  async restoreAccountChunked(zipBytes: Uint8Array): Promise<void> {
-    
-    let totalLength = zipBytes.byteLength;
-    let offset = 0;
-    // The max frame size is 4194304 but leave room for http headers.
-    let chunkSize = 4000000;
-    let hasMore = true;
-
-    while(true) {
-      if(zipBytes.byteLength <= offset + 1) {
-          return;
-      }
-
-      if(zipBytes.byteLength <= offset + chunkSize) {
-          chunkSize = zipBytes.byteLength - offset - 1;
-          hasMore = false;
-      }
-
-      let subArray = zipBytes.subarray(offset, offset + chunkSize);
-      console.log("Sending chunk from", offset, offset + chunkSize, subArray.byteLength);
-      await this.restoreAccount(subArray, offset, totalLength, hasMore);
-      offset += chunkSize;
-    }
-  }
-
-  /**
-   * Restore the account from a zip file.
-   */
-  async restoreAccount(zipBytes: Uint8Array, offset: number, totalLength: number, hasMore: boolean): Promise<void> {
+  async _restoreAccountChunk(zipBytes: Uint8Array, offset: number, totalLength: number, hasMore: boolean): Promise<void> {
     let that = this;
     let request = new RestoreAccountRequest()
       .setZipBytes(zipBytes)
@@ -1001,28 +1005,10 @@ class HavenoDaemon {
     return new Promise(function(resolve, reject) {
       that._accountClient.restoreAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
-        else {
-          // Restore needs to wait for process to shutdown. Should improve this to be more accurate.
-          setTimeout(resolve, 5000);
-        }
+        else setTimeout(resolve, 5000); // restore needs to wait for process to shutdown. improve this to be more accurate
       });
     });
   }
-
-  /**
-   * Calls the stop rpc.
-   */
-  async shutdownServer(): Promise<void> {
-    let that = this;
-    let request = new StopRequest();
-    return new Promise(function(resolve, reject) {
-      that._shutdownServerClient.stop(request, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-
 }
 
 export {HavenoDaemon};

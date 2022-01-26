@@ -59,13 +59,13 @@ const TestConfig = {
     },
     startupHavenods: [{
             appName: "haveno-XMR_STAGENET_arbitrator",  // arbritrator
-            logProcessOutput: true,
+            logProcessOutput: false,
             uri: "http://localhost:8079",
             apiPassword: "apitest",
             accountPassword: "abctesting123",
             walletUsername: "rpc_user",
             walletPassword: "abc123", // TODO (woodser): replace walletPassword with accountPassword
-            passwordRequired: false,
+            passwordRequired: true,
             proxyPort: 8079 // TODO (woodser): proxy port is already in url, don't be redundant
         }, {
             appName: "haveno-XMR_STAGENET_alice",       // alice
@@ -76,7 +76,7 @@ const TestConfig = {
             walletUri: "http://127.0.0.1:38091",
             walletUsername: "rpc_user",
             walletPassword: "abc123",
-            passwordRequired: false,
+            passwordRequired: true,
             proxyPort: 8080
         }, {
             appName: "haveno-XMR_STAGENET_bob",         // bob
@@ -84,7 +84,7 @@ const TestConfig = {
             uri: "http://localhost:8081",
             apiPassword: "apitest",
             accountPassword: "abctesting789",
-            passwordRequired: false,
+            passwordRequired: true,
             proxyPort: 8081
         }
     ],
@@ -1225,7 +1225,7 @@ async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
  * Stop a Haveno daemon process and release its ports for reuse.
  */
 async function stopHavenoProcess(havenod: HavenoDaemon) {
-  await havenod.stopProcess();
+  await havenod.shutdownServer();
   GenUtils.remove(HAVENO_PROCESSES, havenod);
   GenUtils.remove(HAVENO_PROCESS_PORTS, new URL(havenod.getUrl()).port); // TODO (woodser): standardize to uri
 }
