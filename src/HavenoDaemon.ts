@@ -32,6 +32,7 @@ class HavenoDaemon {
   _processLogging: boolean = false;
   _walletRpcPort: number|undefined;
   _notificationListeners: ((notification: NotificationMessage) => void)[] = [];
+  _keepAliveLooper: any;
   _keepAlivePeriodMs: number = 60000;
   
   /**
@@ -922,13 +923,15 @@ class HavenoDaemon {
    * Shutdown the Haveno daemon server and stop the process if applicable.
    */
   async shutdownServer() {
+    if (this._keepAliveLooper) this._keepAliveLooper.stop();
     let that = this;
-    return new Promise(function(resolve, reject) {
+    await new Promise(function(resolve, reject) {
       that._shutdownServerClient.stop(new StopRequest(), {password: that._password}, function(err: grpcWeb.RpcError) { // process receives 'exit' event
         if (err) reject(err);
         else resolve();
       });
     });
+    if (this._process) return HavenoUtils.kill(this._process);
   }
 
   // ------------------------------- HELPERS ----------------------------------
@@ -992,7 +995,7 @@ class HavenoDaemon {
       
       // periodically send keep alive requests // TODO (woodser): better way to keep notification stream alive?
       let firstRequest = true;
-      let taskLooper = new TaskLooper(async function() {
+      that._keepAliveLooper = new TaskLooper(async function() {
         if (firstRequest) {
           firstRequest = false;
           return;
@@ -1001,7 +1004,7 @@ class HavenoDaemon {
                 .setType(NotificationMessage.NotificationType.KEEP_ALIVE)
                 .setTimestamp(Date.now()));
       });
-      taskLooper.start(that._keepAlivePeriodMs);
+      that._keepAliveLooper.start(that._keepAlivePeriodMs);
       
       // TODO: call returns before listener registered
       setTimeout(function() { resolve(); }, 1000);
