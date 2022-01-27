@@ -76,7 +76,7 @@ class HavenoDaemon {
       
       // state variables
       let output = "";
-      let isResolved = false;
+      let isStarted = false;
       let daemon: HavenoDaemon|undefined = undefined;
       
       // start process
@@ -113,13 +113,13 @@ class HavenoDaemon {
           if (walletRpcPortIdx >= 0) daemon._walletRpcPort = parseInt(cmd[walletRpcPortIdx + 1]);
           
           // resolve promise with client connected to internal process
-          isResolved = true;
+          isStarted = true;
           resolve(daemon);
         }
         
         // read error message
         if (line.indexOf("[HavenoDaemonMain] ERROR") >= 0) {
-          if (!isResolved) await rejectProcess(new Error(line));
+          if (!isStarted) await rejectStartup(new Error(line));
         }
       });
       
@@ -130,23 +130,25 @@ class HavenoDaemon {
       
       // handle exit
       childProcess.on("exit", async function(code: any) {
-        if (!isResolved) await rejectProcess(new Error("Haveno process terminated with exit code " + code + (output ? ":\n\n" + output : "")));
+        console.log('EXIT CALLED!!!');
+        if (!isStarted) await rejectStartup(new Error("Haveno process terminated with exit code " + code + (output ? ":\n\n" + output : "")));
       });
       
       // handle error
       childProcess.on("error", async function(err: any) {
+        console.log('ERROR CALLED!!!');
         if (err.message.indexOf("ENOENT") >= 0) reject(new Error("haveno-daemon does not exist at path '" + cmd[0] + "'"));
-        if (!isResolved) await rejectProcess(err);
+        if (!isStarted) await rejectStartup(err);
       });
       
       // handle uncaught exception
       childProcess.on("uncaughtException", async function(err: any, origin: any) {
         console.error("Uncaught exception in Haveno process: " + err.message);
         console.error(origin);
-        await rejectProcess(err);
+        await rejectStartup(err);
       });
       
-      async function rejectProcess(err: any) {
+      async function rejectStartup(err: any) {
         await HavenoUtils.kill(childProcess);
         reject(err);
       }
@@ -155,21 +157,6 @@ class HavenoDaemon {
         return (daemon && daemon._processLogging) || (!daemon && enableLogging);
       }
     });
-  }
-  
-  /**
-   * Shutdown the Haveno daemon server.
-   */
-  async shutdownServer() {
-    let that = this;
-    let request = new StopRequest();
-    await new Promise(function(resolve, reject) {
-      that._shutdownServerClient.stop(request, {password: that._password}, function(err: grpcWeb.RpcError) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-    if (this._process) HavenoUtils.kill(this._process); // stop process if started
   }
   
   /**
@@ -322,16 +309,14 @@ class HavenoDaemon {
   }
   
   /**
-   * Permanently delete the Haveno account.
+   * Permanently delete the Haveno account and shutdown the server. // TODO: possible to not shutdown server?
    */
   async deleteAccount(): Promise<void> {
     let that = this;
     return new Promise(function(resolve, reject) {
-      that._accountClient.deleteAccount(new DeleteAccountRequest(), {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._accountClient.deleteAccount(new DeleteAccountRequest(), {password: that._password}, async function(err: grpcWeb.RpcError) {
         if (err) reject(err);
-        else {
-          setTimeout(resolve, 5000); // delete needs to wait for process to shutdown. improve this to be more accurate
-        }
+        else setTimeout(resolve, 5000);
       });
     });
   }
@@ -347,7 +332,6 @@ class HavenoDaemon {
       response.on('data', (chunk) => {
         let bytes = (chunk as BackupAccountReply).getZipBytes(); // TODO: right api?
         total += bytes.length;
-        console.log("Got a chunk of bytes, total:", total);
         stream.write(bytes);
       });
       response.on('error', function(err) {
@@ -928,6 +912,19 @@ class HavenoDaemon {
     let that = this;
     return new Promise(function(resolve, reject) {
       that._tradesClient.confirmPaymentReceived(new ConfirmPaymentReceivedRequest().setTradeId(tradeId), {password: that._password}, function(err: grpcWeb.RpcError) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+  
+  /**
+   * Shutdown the Haveno daemon server and stop the process if applicable.
+   */
+  async shutdownServer() {
+    let that = this;
+    return new Promise(function(resolve, reject) {
+      that._shutdownServerClient.stop(new StopRequest(), {password: that._password}, function(err: grpcWeb.RpcError) { // process receives 'exit' event
         if (err) reject(err);
         else resolve();
       });
