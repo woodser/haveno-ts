@@ -352,6 +352,7 @@ class HavenoDaemon {
    * @param {Uint8Array} zipBytes - the bytes of the zipped account to restore
    */
   async restoreAccount(zipBytes: Uint8Array): Promise<void> {
+    if (zipBytes.length === 0) throw new Error("Zip bytes must not be empty")
     let totalLength = zipBytes.byteLength;
     let offset = 0;
     let chunkSize = 4000000; // the max frame size is 4194304 but leave room for http headers
@@ -1037,6 +1038,7 @@ class HavenoDaemon {
       .setTotalLength(totalLength)
       .setHasMore(hasMore);
     return new Promise(function(resolve, reject) {
+      console.log("Sending restoreAccount() request!");
       that._accountClient.restoreAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else setTimeout(resolve, 5000); // restore needs to wait for process to shutdown. improve this to be more accurate

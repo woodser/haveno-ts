@@ -281,24 +281,25 @@ test("Can manage an account", async () => {
     let zipFile = rootDir + "/backup.zip";
     console.log("Creating backup to " + zipFile);
     let stream = fs.createWriteStream(zipFile);
-    stream.end();
     let size = await charlie.backupAccount(stream);
+    stream.end();
     assert(size > 0);
     
-    console.log("tezt 13");
+    // delete account which shuts down server
+    await charlie.deleteAccount();
+    assert(!await isOnline(charlie));
+    await releaseHavenoProcess(charlie);
     
-/*    // restore account from zip file
+    // restore account which shuts down server
+    charlie = await initHavenoDaemon({appName: appName});
     let zipBytes: Uint8Array = new Uint8Array(fs.readFileSync(zipFile));
     console.log("Restoring backup from " + zipFile);
     await charlie.restoreAccount(zipBytes);
-    console.log("Testing if charlie is online!");
-    let online = await isOnline(charlie);
-    console.log("Done testing if charlie is online!");
-    assert(!online);
+    assert(!await isOnline(charlie));
     await releaseHavenoProcess(charlie);
     console.log("tezt 13.1");
     
-    // start charlie
+    // open restored account
     charlie = await initHavenoDaemon({appName: appName});
     console.log("tezt 13.2");
     assert(await charlie.accountExists());
@@ -306,12 +307,7 @@ test("Can manage an account", async () => {
     await charlie.openAccount(password);
     console.log("tezt 13.4");
     assert(await charlie.isAccountOpen());
-    
-    console.log("tezt 14");*/
-    
-    // delete account
-    await charlie.deleteAccount();
-    assert(!await isOnline(charlie));
+    console.log("tezt 14");
   } catch (err2) {
     console.log(err2);
     err = err2;
