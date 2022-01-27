@@ -402,6 +402,7 @@ test("Can manage Monero daemon connections", async () => {
     let appName = charlie.getAppName();
     await releaseHavenoProcess(charlie);
     charlie = await initHavenoDaemon({appName: appName});
+    await initHavenoAccount(charlie, "testPassword"); // TODO: refactor to initHavenoDaemon config
 
     // connection is restored, online, and authenticated
     connection = await charlie.getMoneroConnection();
