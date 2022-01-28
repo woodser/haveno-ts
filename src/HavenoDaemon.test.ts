@@ -186,7 +186,6 @@ test("Can get the version", async () => {
   expect(version).toEqual(TestConfig.haveno.version);
 });
 
-// TODO: test wrong passwords
 test("Can manage an account", async () => {
   let charlie: HavenoDaemon | undefined;
   let err: any;
@@ -217,6 +216,16 @@ test("Can manage an account", async () => {
     await testUnopenedAccountErrors(charlie);
     
     console.log("tezt 3");
+    
+    // open account with wrong password
+    try {
+        await charlie.openAccount("wrongPassword");
+        throw new Error("Should have failed opening account with wrong password");
+    } catch (err) {
+        assert.equal(err.message, "Incorrect password");
+    }
+    
+    console.log("tezt 3.1");
     
     // open account
     await charlie.openAccount(password);
@@ -417,7 +426,7 @@ test("Can manage Monero daemon connections", async () => {
 
     // check current connection
     connection = await charlie.checkMoneroConnection();
-    assert.equal(undefined, connection);
+    assert.equal(connection, undefined);
 
     // check all connections
     await charlie.checkMoneroConnections();
@@ -439,7 +448,7 @@ test("Can manage Monero daemon connections", async () => {
 
     // reset connection
     await charlie.setMoneroConnection();
-    assert.equal(undefined, await charlie.getMoneroConnection());
+    assert.equal(await charlie.getMoneroConnection(), undefined);
 
     // test auto switch after start checking connection
     await charlie.setAutoSwitch(false);
@@ -542,11 +551,11 @@ test("Can receive push notifications", async () => {
 
   // test notification
   await wait(1000);
-  assert.equal(3, notifications.length);
+  assert.equal(notifications.length, 3);
   for (let i = 0; i < 3; i++) {
     assert(notifications[i].getTimestamp() > 0);
-    assert.equal("Test title", notifications[i].getTitle());
-    assert.equal("Test message", notifications[i].getMessage());
+    assert.equal(notifications[i].getTitle(), "Test title");
+    assert.equal(notifications[i].getMessage(), "Test message");
   }
 });
 
@@ -1132,7 +1141,7 @@ async function releaseHavenoProcess(havenod: HavenoDaemon) {
     await havenod.shutdownServer();
     console.log("Done shutting down server!");
   } catch (err) {
-    assert.equal(OFFLINE_ERR_MSG, err.message);
+    assert.equal(err.message, OFFLINE_ERR_MSG);
   }
 }
 
@@ -1142,7 +1151,7 @@ async function isOnline(havenod: HavenoDaemon): Promise<boolean> {
       await havenod.getVersion();
       return true;
     } catch (err) {
-      assert.equal(OFFLINE_ERR_MSG, err.message);
+      assert.equal(err.message, OFFLINE_ERR_MSG);
       return false;
     }   
 }
