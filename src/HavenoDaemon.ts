@@ -25,7 +25,7 @@ class HavenoDaemon {
   _accountClient: AccountClient;
   _shutdownServerClient: ShutdownServerClient;
   
-  // other instance variables
+  // state variables
   _url: string;
   _password: string;
   _process: any;
@@ -34,6 +34,10 @@ class HavenoDaemon {
   _notificationListeners: ((notification: NotificationMessage) => void)[] = [];
   _keepAliveLooper: any;
   _keepAlivePeriodMs: number = 60000;
+  
+  // constants
+  static readonly _fullyInitializedMessage = "AppStartupState: Application fully initialized";
+  static readonly _loginRequiredMessage = "HavenoDaemonMain: Interactive login required";
   
   /**
    * Construct a client connected to a Haveno daemon.
@@ -91,9 +95,8 @@ class HavenoDaemon {
         if (loggingEnabled()) process.stdout.write(line);
         output += line + '\n'; // capture output in case of error
         
-        // read success message or if a login is required
-        if ((line.indexOf("AppStartupState: Application fully initialized ") >= 0) || 
-            (line.indexOf("HavenoDaemonMain: Interactive login required") >= 0)) {
+        // initialize daemon on success or login required message
+        if (!daemon && (line.indexOf(HavenoDaemon._fullyInitializedMessage) >= 0 || line.indexOf(HavenoDaemon._loginRequiredMessage) >= 0)) {
           
           // get api password
           let passwordIdx = cmd.indexOf("--apiPassword");
