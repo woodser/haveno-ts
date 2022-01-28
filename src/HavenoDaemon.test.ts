@@ -321,10 +321,9 @@ test("Can manage an account", async () => {
 });
 
 async function testUnopenedAccountErrors(havenod: HavenoDaemon): Promise<void> {
-    //throw new Error("Not implemented");
+    //throw new Error("Not implemented"); // TODO
 }
 
-// TODO: test changing account password
 test("Can manage Monero daemon connections", async () => {
   let monerod2: any;
   let charlie: HavenoDaemon | undefined;
@@ -395,11 +394,15 @@ test("Can manage Monero daemon connections", async () => {
     // connection is online and authenticated
     connection = await charlie.checkMoneroConnection();
     testConnection(connection!, TestConfig.monerod2.uri, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
+    
+    // change account password
+    let password = "newPassword";
+    await charlie.changePassword("newPassword");
 
     // restart charlie
     let appName = charlie.getAppName();
     await releaseHavenoProcess(charlie);
-    charlie = await initHavenoDaemon({appName: appName});
+    charlie = await initHavenoDaemon({appName: appName, accountPassword: password});
 
     // connection is restored, online, and authenticated
     connection = await charlie.getMoneroConnection();
