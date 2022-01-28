@@ -43,15 +43,34 @@ class HavenoUtils {
    * 
    * TODO (woodser): move this to monero-javascript GenUtils.js as common utility
    * 
-   * @param process is the nodejs child process to child
+   * @param {Process} process - the nodejs child process to child
+   * @param {String} signal - the kill signal, e.g. SIGTERM, SIGKILL, SIGINT (default)
    */
-  static async kill(process: any): Promise<void> {
+  static async kill(process: any, signal?: string): Promise<void> {
     return new Promise(function(resolve, reject) {
       process.on("exit", function() { resolve(); });
       process.on("error", function(err: any) { reject(err); });
-      process.kill("SIGINT");
+      process.kill(signal ? signal : "SIGINT");
     });
   }
+
+  static FlattenArray(arrays: Uint8Array[]): Uint8Array {
+    // Get the total length of all arrays.
+    let length = 0;
+    arrays.forEach(a => {
+      length += a.length;
+    });
+    
+    // Create a new array with total length and merge all source arrays.
+    let result = new Uint8Array(length);
+    let offset = 0;
+    arrays.forEach(a => {
+      result.set(a, offset);
+      offset += a.length;
+    });
+
+    return result;
+  } 
 }
 
 export {HavenoUtils};
