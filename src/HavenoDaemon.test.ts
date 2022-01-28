@@ -67,7 +67,6 @@ const TestConfig = {
             accountPassword: "abctesting123",
             walletUsername: "rpc_user",
             walletPassword: "abc123", // TODO (woodser): replace walletPassword with accountPassword
-            proxyPort: 8079 // TODO (woodser): proxy port is already in url, redundant
         }, {
             appName: "haveno-XMR_STAGENET_alice",       // alice
             logProcessOutput: false,
@@ -78,7 +77,6 @@ const TestConfig = {
             walletUri: "http://127.0.0.1:38091",
             walletUsername: "rpc_user",
             walletPassword: "abc123",
-            proxyPort: 8080
         }, {
             appName: "haveno-XMR_STAGENET_bob",         // bob
             logProcessOutput: false,
@@ -86,7 +84,6 @@ const TestConfig = {
             apiPassword: "apitest",
             passwordRequired: true,
             accountPassword: "abctesting789",
-            proxyPort: 8081
         }
     ],
     maxFee: BigInt("75000000000"),
@@ -1095,18 +1092,20 @@ async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
     await havenod.getVersion();
   } catch (err) {
     
-    // get proxy port for haveno process
-    if (!config.proxyPort) {
+    // get port for haveno process
+    let proxyPort = "";
+    if (config.uri) proxyPort = new URL(config.uri).port
+    else {
       for (let port of Array.from(TestConfig.proxyPorts.keys())) {
         if (port === "8079" || port === "8080" || port === "8081") continue; // reserved for arbitrator, alice, and bob
         if (!GenUtils.arrayContains(HAVENO_PROCESS_PORTS, port)) {
           HAVENO_PROCESS_PORTS.push(port);
-          config.proxyPort = port;
+          proxyPort = port;
           break;
         }
       }
     }
-    if (!config.proxyPort) throw new Error("No unused test ports available");
+    if (!proxyPort) throw new Error("No unused test ports available");
     
     // start haveno process using configured ports if available
     let cmd: string[] = [
@@ -1114,14 +1113,14 @@ async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
       "--baseCurrencyNetwork", "XMR_STAGENET",
       "--useLocalhostForP2P", "true",
       "--useDevPrivilegeKeys", "true",
-      "--nodePort", TestConfig.proxyPorts.get("" + config.proxyPort)![1],
+      "--nodePort", TestConfig.proxyPorts.get(proxyPort)![1],
       "--appName", config.appName,
       "--apiPassword", "apitest",
-      "--apiPort", TestConfig.proxyPorts.get("" + config.proxyPort)![0],
-      "--walletRpcBindPort", "" + (config.walletUri ? new URL(config.walletUri).port : await getAvailablePort()), // use configured port if given
+      "--apiPort", TestConfig.proxyPorts.get(proxyPort)![0],
+      "--walletRpcBindPort", config.walletUri ? new URL(config.walletUri).port : "" + await getAvailablePort(), // use configured port if given
       "--passwordRequired", (config.passwordRequired ? "true" : "false")
     ];
-    havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + config.proxyPort, config.logProcessOutput);
+    havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + proxyPort, config.logProcessOutput);
     HAVENO_PROCESSES.push(havenod);
   }
   
