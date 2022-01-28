@@ -88,7 +88,7 @@ class HavenoDaemon {
       // handle stdout
       childProcess.stdout.on('data', async function(data: any) {
         let line = data.toString();
-        if (HavenoUtils.getLogLevel() >= 3 && loggingEnabled()) process.stdout.write(line);
+        if (loggingEnabled()) process.stdout.write(line);
         output += line + '\n'; // capture output in case of error
         
         // read success message or if a login is required
@@ -126,7 +126,7 @@ class HavenoDaemon {
       
       // handle stderr
       childProcess.stderr.on('data', function(data: any) {
-        if (HavenoUtils.getLogLevel() >= 2 && loggingEnabled()) process.stderr.write(data);
+        if (loggingEnabled()) process.stderr.write(data);
       });
       
       // handle exit

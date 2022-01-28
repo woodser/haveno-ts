@@ -54,38 +54,38 @@ const TestConfig = {
     defaultHavenod: {
         logProcessOutput: true,
         apiPassword: "apitest",
-        accountPassword: "abctesting789",
         passwordRequired: true,
-        login: true
+        accountPassword: "abctesting789",
+        autoLogin: true
     },
     startupHavenods: [{
             appName: "haveno-XMR_STAGENET_arbitrator",  // arbritrator
             logProcessOutput: false,
             uri: "http://localhost:8079",
             apiPassword: "apitest",
+            passwordRequired: true,
             accountPassword: "abctesting123",
             walletUsername: "rpc_user",
             walletPassword: "abc123", // TODO (woodser): replace walletPassword with accountPassword
-            passwordRequired: true,
             proxyPort: 8079 // TODO (woodser): proxy port is already in url, redundant
         }, {
             appName: "haveno-XMR_STAGENET_alice",       // alice
             logProcessOutput: false,
             uri: "http://localhost:8080",
             apiPassword: "apitest",
+            passwordRequired: true,
             accountPassword: "abctesting456",
             walletUri: "http://127.0.0.1:38091",
             walletUsername: "rpc_user",
             walletPassword: "abc123",
-            passwordRequired: true,
             proxyPort: 8080
         }, {
             appName: "haveno-XMR_STAGENET_bob",         // bob
             logProcessOutput: false,
             uri: "http://localhost:8081",
             apiPassword: "apitest",
-            accountPassword: "abctesting789",
             passwordRequired: true,
+            accountPassword: "abctesting789",
             proxyPort: 8081
         }
     ],
@@ -112,7 +112,7 @@ const TestConfig = {
         ["8086", ["10005", "7781"]],
     ]),
     devPrivilegePrivKey: "6ac43ea1df2a290c1c8391736aa42e4339c5cb4f110ff0257a13b63211977b7a", // from DEV_PRIVILEGE_PRIV_KEY
-    timeout: 500000 // timeout in ms for all tests to complete
+    timeout: 600000 // timeout in ms for all tests to complete (10 minutes)
 };
 
 interface TxContext {
@@ -152,11 +152,6 @@ beforeAll(async () => {
     startupHavenods.push((settledPromise as PromiseFulfilledResult<HavenoDaemon>).value);
   }
   
-  // create or open accounts
-  promises = [];
-  for (let i = 0; i < TestConfig.startupHavenods.length; i++) promises.push(initHavenoAccount(startupHavenods[i], TestConfig.startupHavenods[i].accountPassword));
-  await Promise.all(promises);
-  
   // assign arbitrator alice, bob
   arbitrator = startupHavenods[0];
   alice = startupHavenods[1];
@@ -172,12 +167,6 @@ beforeAll(async () => {
   
   // initialize funding wallet
   await initFundingWallet();
-  
-  // debug tools
-  //for (let offer of await alice.getMyOffers("BUY")) await alice.removeOffer(offer.getId());
-  //for (let offer of await alice.getMyOffers("SELL")) await alice.removeOffer(offer.getId());
-  //console.log((await alice.getBalances()).getUnlockedBalance() + ", " + (await alice.getBalances()).getLockedBalance());
-  //console.log((await bob.getBalances()).getUnlockedBalance() + ", " + (await bob.getBalances()).getLockedBalance());
 });
 
 beforeEach(async() => {
@@ -202,9 +191,9 @@ test("Can manage an account", async () => {
   let charlie: HavenoDaemon | undefined;
   let err: any;
   try {
-
-    // start charlie
-    charlie = await initHavenoDaemon();
+    
+    // start charlie without opening account
+    charlie = await initHavenoDaemon({autoLogin: false});
     assert(!await charlie.accountExists());
     
     // test errors when account not open
@@ -215,6 +204,7 @@ test("Can manage an account", async () => {
     // create account
     let password = "testPassword";
     await charlie.createAccount(password);
+    await charlie.getBalances();
     assert(await charlie.accountExists());
     assert(await charlie.isAccountOpen());
     
@@ -236,10 +226,10 @@ test("Can manage an account", async () => {
     console.log("tezt 4");
     
     // restart charlie
-    let appName = charlie.getAppName();
+    let charlieConfig = {appName: charlie.getAppName(), autoLogin: false}
     await releaseHavenoProcess(charlie);
     console.log("Done releasing Haveno process!");
-    charlie = await initHavenoDaemon({appName: appName});
+    charlie = await initHavenoDaemon(charlieConfig);
     assert(await charlie.accountExists());
     assert(!await charlie.isAccountOpen());
     
@@ -264,7 +254,7 @@ test("Can manage an account", async () => {
     // restart charlie
     await releaseHavenoProcess(charlie);
     console.log("Done releasing Haveno process!");
-    charlie = await initHavenoDaemon({appName: appName});
+    charlie = await initHavenoDaemon(charlieConfig);
     
     console.log("tezt 9");
     
@@ -291,7 +281,7 @@ test("Can manage an account", async () => {
     await releaseHavenoProcess(charlie);
     
     // restore account which shuts down server
-    charlie = await initHavenoDaemon({appName: appName});
+    charlie = await initHavenoDaemon(charlieConfig);
     let zipBytes: Uint8Array = new Uint8Array(fs.readFileSync(zipFile));
     console.log("Restoring backup from " + zipFile);
     await charlie.restoreAccount(zipBytes);
@@ -300,7 +290,7 @@ test("Can manage an account", async () => {
     console.log("tezt 13.1");
     
     // open restored account
-    charlie = await initHavenoDaemon({appName: appName});
+    charlie = await initHavenoDaemon(charlieConfig);
     console.log("tezt 13.2");
     assert(await charlie.accountExists());
     console.log("tezt 13.3");
@@ -334,7 +324,6 @@ test("Can manage Monero daemon connections", async () => {
 
     // start charlie
     charlie = await initHavenoDaemon();
-    await initHavenoAccount(charlie, "testPassword");
 
     // test default connections
     let monerodUri1 = "http://localhost:38081"; // TODO: (woodser): move to config
@@ -402,7 +391,6 @@ test("Can manage Monero daemon connections", async () => {
     let appName = charlie.getAppName();
     await releaseHavenoProcess(charlie);
     charlie = await initHavenoDaemon({appName: appName});
-    await initHavenoAccount(charlie, "testPassword"); // TODO: refactor to initHavenoDaemon config
 
     // connection is restored, online, and authenticated
     connection = await charlie.getMoneroConnection();
@@ -1066,7 +1054,7 @@ function testConnection(connection: UriConnection, uri?: string, onlineStatus?: 
 
 async function initHavenoDaemons(numDaemons: number, config?: any) {
   let traderPromises: Promise<HavenoDaemon>[] = [];
-  for (let i = 0; i < numDaemons; i++) traderPromises.push(config);
+  for (let i = 0; i < numDaemons; i++) traderPromises.push(initHavenoDaemon(config));
   return Promise.all(traderPromises);
 }
 
@@ -1086,12 +1074,13 @@ async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
     });
   }
   
+  // connect to existing server or start new process
+  let havenod;
   try {
     
     // try to connect to existing server
-    let havenod = new HavenoDaemon(config.uri, config.apiPassword);
+    havenod = new HavenoDaemon(config.uri, config.apiPassword);
     await havenod.getVersion();
-    return havenod;
   } catch (err) {
     
     // get proxy port for haveno process
@@ -1120,10 +1109,13 @@ async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
       "--walletRpcBindPort", "" + (config.walletUri ? new URL(config.walletUri).port : await getAvailablePort()), // use configured port if given
       "--passwordRequired", (config.passwordRequired ? "true" : "false")
     ];
-    let havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + config.proxyPort, config.logProcessOutput);
+    havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + config.proxyPort, config.logProcessOutput);
     HAVENO_PROCESSES.push(havenod);
-    return havenod;
   }
+  
+  // open account if configured
+  if (config.autoLogin) await initHavenoAccount(havenod, config.accountPassword);
+  return havenod;
 }
 
 /**
