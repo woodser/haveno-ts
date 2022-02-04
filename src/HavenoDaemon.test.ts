@@ -4,11 +4,11 @@
 import {HavenoDaemon} from "./HavenoDaemon";
 import {HavenoUtils} from "./utils/HavenoUtils";
 import * as grpcWeb from 'grpc-web';
-import {MarketPriceInfo, NotificationMessage, OfferInfo, TradeInfo, UriConnection, XmrBalanceInfo} from './protobuf/grpc_pb'; // TODO (woodser): better names; haveno_grpc_pb, haveno_pb
+import {MarketPriceInfo, NotificationMessage, OfferInfo, TradeInfo, UrlConnection, XmrBalanceInfo} from './protobuf/grpc_pb'; // TODO (woodser): better names; haveno_grpc_pb, haveno_pb
 import {PaymentAccount} from './protobuf/pb_pb';
 import {XmrDestination, XmrTx, XmrIncomingTransfer, XmrOutgoingTransfer} from './protobuf/grpc_pb';
-import AuthenticationStatus = UriConnection.AuthenticationStatus;
-import OnlineStatus = UriConnection.OnlineStatus;
+import AuthenticationStatus = UrlConnection.AuthenticationStatus;
+import OnlineStatus = UrlConnection.OnlineStatus;
 
 // import monero-javascript
 const monerojs = require("monero-javascript"); // TODO (woodser): support typescript and `npm install @types/monero-javascript` in monero-javascript
@@ -27,7 +27,7 @@ const console = require('console'); // import console because jest swallows mess
 // ------------------------------ TEST CONFIG ---------------------------------
 
 const TestConfig = {
-    logLevel: 3,
+    logLevel: 0,
     moneroBinsDir: "../haveno/.localnet",
     networkType: monerojs.MoneroNetworkType.STAGENET,
     haveno: {
@@ -35,54 +35,51 @@ const TestConfig = {
         version: "1.6.2"
     },
     monerod: {
-        uri: "http://localhost:38081",
+        url: "http://localhost:38081",
         username: "superuser",
         password: "abctesting123"
     },
     monerod2: {
-        uri: "http://localhost:58081",
+        url: "http://localhost:58081",
         username: "superuser",
         password: "abctesting123"
     },
     fundingWallet: {
-        uri: "http://localhost:38084",
+        url: "http://localhost:38084",
         username: "rpc_user",
         password: "abc123",
         defaultPath: "test_funding_wallet",
         minimumFunding: BigInt("5000000000000")
     },
     defaultHavenod: {
-        logProcessOutput: true,
+        logProcessOutput: false, // log output for processes started by tests (except arbitrator, alice, and bob which are configured separately)
         apiPassword: "apitest",
-        passwordRequired: true,
+        walletUsername: "haveno_user",
+        accountPasswordRequired: true,
         accountPassword: "abctesting789",
         autoLogin: true
     },
     startupHavenods: [{
             appName: "haveno-XMR_STAGENET_arbitrator",  // arbritrator
             logProcessOutput: false,
-            uri: "http://localhost:8079",
+            url: "http://localhost:8079",
             apiPassword: "apitest",
-            passwordRequired: true,
+            accountPasswordRequired: true,
             accountPassword: "abctesting123",
-            walletUsername: "rpc_user",
-            walletPassword: "abc123", // TODO (woodser): replace walletPassword with accountPassword
         }, {
             appName: "haveno-XMR_STAGENET_alice",       // alice
             logProcessOutput: false,
-            uri: "http://localhost:8080",
+            url: "http://localhost:8080",
             apiPassword: "apitest",
-            passwordRequired: true,
+            accountPasswordRequired: true,
             accountPassword: "abctesting456",
-            walletUri: "http://127.0.0.1:38091",
-            walletUsername: "rpc_user",
-            walletPassword: "abc123",
+            walletUrl: "http://127.0.0.1:38091",
         }, {
             appName: "haveno-XMR_STAGENET_bob",         // bob
             logProcessOutput: false,
-            uri: "http://localhost:8081",
+            url: "http://localhost:8081",
             apiPassword: "apitest",
-            passwordRequired: true,
+            accountPasswordRequired: true,
             accountPassword: "abctesting789",
         }
     ],
@@ -109,7 +106,7 @@ const TestConfig = {
         ["8086", ["10005", "7781"]],
     ]),
     devPrivilegePrivKey: "6ac43ea1df2a290c1c8391736aa42e4339c5cb4f110ff0257a13b63211977b7a", // from DEV_PRIVILEGE_PRIV_KEY
-    timeout: 600000 // timeout in ms for all tests to complete (10 minutes)
+    timeout: 900000 // timeout in ms for all tests to complete (15 minutes)
 };
 
 interface TxContext {
@@ -159,8 +156,8 @@ beforeAll(async () => {
   await arbitrator.registerDisputeAgent("refundagent", TestConfig.devPrivilegePrivKey);
 
   // connect monero clients
-  monerod = await monerojs.connectToDaemonRpc(TestConfig.monerod.uri, TestConfig.monerod.username, TestConfig.monerod.password);
-  aliceWallet = await monerojs.connectToWalletRpc(TestConfig.startupHavenods[1].walletUri, TestConfig.startupHavenods[1].walletUsername, TestConfig.startupHavenods[1].walletPassword);
+  monerod = await monerojs.connectToDaemonRpc(TestConfig.monerod.url, TestConfig.monerod.username, TestConfig.monerod.password);
+  aliceWallet = await monerojs.connectToWalletRpc(TestConfig.startupHavenods[1].walletUrl, TestConfig.defaultHavenod.walletUsername, TestConfig.startupHavenods[1].accountPassword);
   
   // initialize funding wallet
   await initFundingWallet();
@@ -193,9 +190,7 @@ test("Can manage an account", async () => {
     assert(!await charlie.accountExists());
     
     // test errors when account not open
-    await testUnopenedAccountErrors(charlie);
-    
-    console.log("tezt 1");
+    await testAccountNotOpen(charlie);
     
     // create account
     let password = "testPassword";
@@ -204,15 +199,11 @@ test("Can manage an account", async () => {
     assert(await charlie.accountExists());
     assert(await charlie.isAccountOpen());
     
-    console.log("tezt 2");
-    
     // close account
     await charlie.closeAccount();
     assert(await charlie.accountExists());
     assert(!await charlie.isAccountOpen());
-    await testUnopenedAccountErrors(charlie);
-    
-    console.log("tezt 3");
+    await testAccountNotOpen(charlie);
     
     // open account with wrong password
     try {
@@ -222,32 +213,22 @@ test("Can manage an account", async () => {
         assert.equal(err.message, "Incorrect password");
     }
     
-    console.log("tezt 3.1");
-    
     // open account
     await charlie.openAccount(password);
     assert(await charlie.accountExists());
     assert(await charlie.isAccountOpen());
-    
-    console.log("tezt 4");
     
     // restart charlie
     let charlieConfig = {appName: charlie.getAppName(), autoLogin: false}
     await releaseHavenoProcess(charlie);
-    console.log("Done releasing Haveno process!");
     charlie = await initHavenoDaemon(charlieConfig);
     assert(await charlie.accountExists());
     assert(!await charlie.isAccountOpen());
     
-    console.log("tezt 4.1");
-    
     // open account
     await charlie.openAccount(password);
-    console.log("tezt 5");
     assert(await charlie.accountExists());
-    console.log("tezt 6");
     assert(await charlie.isAccountOpen());
-    console.log("tezt 7");
     
     // change password
     password = "newPassword";
@@ -255,27 +236,19 @@ test("Can manage an account", async () => {
     assert(await charlie.accountExists());
     assert(await charlie.isAccountOpen());
     
-    console.log("tezt 8");
-    
     // restart charlie
     await releaseHavenoProcess(charlie);
-    console.log("Done releasing Haveno process!");
     charlie = await initHavenoDaemon(charlieConfig);
-    
-    console.log("tezt 9");
+    await testAccountNotOpen(charlie);
     
     // open account
     await charlie.openAccount(password);
-    console.log("tezt 10");
     assert(await charlie.accountExists());
-    console.log("tezt 11");
     assert(await charlie.isAccountOpen());
-    console.log("tezt 12");
     
     // backup account to zip file
     let rootDir = process.cwd();
     let zipFile = rootDir + "/backup.zip";
-    console.log("Creating backup to " + zipFile);
     let stream = fs.createWriteStream(zipFile);
     let size = await charlie.backupAccount(stream);
     stream.end();
@@ -283,43 +256,40 @@ test("Can manage an account", async () => {
     
     // delete account which shuts down server
     await charlie.deleteAccount();
-    assert(!await isOnline(charlie));
+    assert(!await charlie.isConnectedToDaemon());
     await releaseHavenoProcess(charlie);
     
     // restore account which shuts down server
     charlie = await initHavenoDaemon(charlieConfig);
     let zipBytes: Uint8Array = new Uint8Array(fs.readFileSync(zipFile));
-    console.log("Restoring backup from " + zipFile);
     await charlie.restoreAccount(zipBytes);
-    assert(!await isOnline(charlie));
+    assert(!await charlie.isConnectedToDaemon());
     await releaseHavenoProcess(charlie);
-    console.log("tezt 13.1");
     
     // open restored account
     charlie = await initHavenoDaemon(charlieConfig);
-    console.log("tezt 13.2");
     assert(await charlie.accountExists());
-    console.log("tezt 13.3");
     await charlie.openAccount(password);
-    console.log("tezt 13.4");
     assert(await charlie.isAccountOpen());
-    console.log("tezt 14");
   } catch (err2) {
     console.log(err2);
     err = err2;
   }
 
   // stop processes
-  console.log("Done with test, releasing");
   if (charlie) await releaseHavenoProcess(charlie);
-  console.log("Done releasing charlie");
   // TODO: how to delete trader app folder at end of test?
   if (err) throw err;
+  
+  async function testAccountNotOpen(havenod: HavenoDaemon): Promise<void> { // TODO: generalize this?
+    try { await havenod.getMoneroConnections(); throw new Error("Should have thrown"); }
+    catch (err) { assert.equal(err.message, "Account not open"); }
+    try { await havenod.getXmrTxs(); throw new Error("Should have thrown"); }
+    catch (err) { assert.equal(err.message, "Account not open"); }
+    try { await havenod.getBalances(); throw new Error("Should have thrown"); }
+    catch (err) { assert.equal(err.message, "Account not open"); }
+  }
 });
-
-async function testUnopenedAccountErrors(havenod: HavenoDaemon): Promise<void> {
-    //throw new Error("Not implemented"); // TODO
-}
 
 test("Can manage Monero daemon connections", async () => {
   let monerod2: any;
@@ -331,35 +301,35 @@ test("Can manage Monero daemon connections", async () => {
     charlie = await initHavenoDaemon();
 
     // test default connections
-    let monerodUri1 = "http://localhost:38081"; // TODO: (woodser): move to config
-    let monerodUri2 = "http://haveno.exchange:38081";
-    let connections: UriConnection[] = await charlie.getMoneroConnections();
-    testConnection(getConnection(connections, monerodUri1)!, monerodUri1, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
-    testConnection(getConnection(connections, monerodUri2)!, monerodUri2, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 2);
+    let monerodUrl1 = "http://localhost:38081"; // TODO: (woodser): move to config
+    let monerodUrl2 = "http://haveno.exchange:38081";
+    let connections: UrlConnection[] = await charlie.getMoneroConnections();
+    testConnection(getConnection(connections, monerodUrl1)!, monerodUrl1, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
+    testConnection(getConnection(connections, monerodUrl2)!, monerodUrl2, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 2);
 
     // test default connection
-    let connection: UriConnection | undefined = await charlie.getMoneroConnection();
-    testConnection(connection!, monerodUri1, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
-    //assert(await charlie.isMoneroConnected()); // TODO (woodser): support havenod.isConnected()?
+    let connection: UrlConnection | undefined = await charlie.getMoneroConnection();
+    assert(await charlie.isConnectedToMonero());
+    testConnection(connection!, monerodUrl1, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
 
     // add a new connection
-    let fooBarUri = "http://foo.bar";
-    await charlie.addMoneroConnection(fooBarUri);
+    let fooBarUrl = "http://foo.bar";
+    await charlie.addMoneroConnection(fooBarUrl);
     connections = await charlie.getMoneroConnections();
-    connection = getConnection(connections, fooBarUri);
-    testConnection(connection!, fooBarUri, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 0);
-    //connection = await charlie.getMoneroConnection(uri); TODO (woodser): allow getting connection by uri?
+    connection = getConnection(connections, fooBarUrl);
+    testConnection(connection!, fooBarUrl, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 0);
 
     // set prioritized connection without credentials
-    await charlie.setMoneroConnection(new UriConnection()
-        .setUri(TestConfig.monerod2.uri)
+    await charlie.setMoneroConnection(new UrlConnection()
+        .setUrl(TestConfig.monerod2.url)
         .setPriority(1));
     connection = await charlie.getMoneroConnection();
-    testConnection(connection!, TestConfig.monerod2.uri, undefined, undefined, 1); // status may or may not be known due to periodic connection checking
+    testConnection(connection!, TestConfig.monerod2.url, undefined, undefined, 1); // status may or may not be known due to periodic connection checking
 
     // connection is offline
     connection = await charlie.checkMoneroConnection();
-    testConnection(connection!, TestConfig.monerod2.uri, OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION, 1);
+    assert(!await charlie.isConnectedToMonero());
+    testConnection(connection!, TestConfig.monerod2.url, OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION, 1);
 
     // start monerod2
     let cmd = [
@@ -377,20 +347,22 @@ test("Can manage Monero daemon connections", async () => {
 
     // connection is online and not authenticated
     connection = await charlie.checkMoneroConnection();
-    testConnection(connection!, TestConfig.monerod2.uri, OnlineStatus.ONLINE, AuthenticationStatus.NOT_AUTHENTICATED, 1);
+    assert(!await charlie.isConnectedToMonero());
+    testConnection(connection!, TestConfig.monerod2.url, OnlineStatus.ONLINE, AuthenticationStatus.NOT_AUTHENTICATED, 1);
 
     // set connection credentials
-    await charlie.setMoneroConnection(new UriConnection()
-        .setUri(TestConfig.monerod2.uri)
+    await charlie.setMoneroConnection(new UrlConnection()
+        .setUrl(TestConfig.monerod2.url)
         .setUsername(TestConfig.monerod2.username)
         .setPassword(TestConfig.monerod2.password)
         .setPriority(1));
     connection = await charlie.getMoneroConnection();
-    testConnection(connection!, TestConfig.monerod2.uri, undefined, undefined, 1);
+    testConnection(connection!, TestConfig.monerod2.url, undefined, undefined, 1);
 
     // connection is online and authenticated
     connection = await charlie.checkMoneroConnection();
-    testConnection(connection!, TestConfig.monerod2.uri, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
+    assert(await charlie.isConnectedToMonero());
+    testConnection(connection!, TestConfig.monerod2.url, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
     
     // change account password
     let password = "newPassword";
@@ -403,9 +375,9 @@ test("Can manage Monero daemon connections", async () => {
 
     // connection is restored, online, and authenticated
     connection = await charlie.getMoneroConnection();
-    testConnection(connection!, TestConfig.monerod2.uri, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
+    testConnection(connection!, TestConfig.monerod2.url, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
     connections = await charlie.getMoneroConnections();
-    testConnection(getConnection(connections, monerodUri1)!, monerodUri1, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 1);
+    testConnection(getConnection(connections, monerodUrl1)!, monerodUrl1, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 1);
 
     // enable auto switch
     await charlie.setAutoSwitch(true);
@@ -416,13 +388,13 @@ test("Can manage Monero daemon connections", async () => {
     // test auto switch after periodic connection check
     await wait(TestConfig.daemonPollPeriodMs);
     connection = await charlie.getMoneroConnection();
-    testConnection(connection!, monerodUri1, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
+    testConnection(connection!, monerodUrl1, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 1);
 
     // stop checking connection periodically
     await charlie.stopCheckingConnection();
 
     // remove current connection
-    await charlie.removeMoneroConnection(monerodUri1);
+    await charlie.removeMoneroConnection(monerodUrl1);
 
     // check current connection
     connection = await charlie.checkMoneroConnection();
@@ -431,20 +403,20 @@ test("Can manage Monero daemon connections", async () => {
     // check all connections
     await charlie.checkMoneroConnections();
     connections = await charlie.getMoneroConnections();
-    testConnection(getConnection(connections, fooBarUri)!, fooBarUri, OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION, 0);
-    for (let connection of connections) testConnection(connection!, connection.getUri(), OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION);
+    testConnection(getConnection(connections, fooBarUrl)!, fooBarUrl, OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION, 0);
+    for (let connection of connections) testConnection(connection!, connection.getUrl(), OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION);
 
-    // set connection to previous uri
-    await charlie.setMoneroConnection(fooBarUri);
+    // set connection to previous url
+    await charlie.setMoneroConnection(fooBarUrl);
     connection = await charlie.getMoneroConnection();
-    testConnection(connection!, fooBarUri, OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION, 0);
+    testConnection(connection!, fooBarUrl, OnlineStatus.OFFLINE, AuthenticationStatus.NO_AUTHENTICATION, 0);
 
-    // set connection to new uri
-    let fooBarUri2 = "http://foo.bar.xyz";
-    await charlie.setMoneroConnection(fooBarUri2);
+    // set connection to new url
+    let fooBarUrl2 = "http://foo.bar.xyz";
+    await charlie.setMoneroConnection(fooBarUrl2);
     connections = await charlie.getMoneroConnections();
-    connection = getConnection(connections, fooBarUri2);
-    testConnection(connection!, fooBarUri2, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 0);
+    connection = getConnection(connections, fooBarUrl2);
+    testConnection(connection!, fooBarUrl2, OnlineStatus.UNKNOWN, AuthenticationStatus.NO_AUTHENTICATION, 0);
 
     // reset connection
     await charlie.setMoneroConnection();
@@ -454,14 +426,14 @@ test("Can manage Monero daemon connections", async () => {
     await charlie.setAutoSwitch(false);
     await charlie.startCheckingConnection(5000); // checks the connection
     await charlie.setAutoSwitch(true);
-    await charlie.addMoneroConnection(new UriConnection()
-            .setUri(TestConfig.monerod.uri)
+    await charlie.addMoneroConnection(new UrlConnection()
+            .setUrl(TestConfig.monerod.url)
             .setUsername(TestConfig.monerod.username)
             .setPassword(TestConfig.monerod.password)
             .setPriority(2));
     await wait(10000);
     connection = await charlie.getMoneroConnection();
-    testConnection(connection!, TestConfig.monerod.uri, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 2);
+    testConnection(connection!, TestConfig.monerod.url, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 2);
   } catch (err2) {
     err = err2;
   }
@@ -545,17 +517,17 @@ test("Can receive push notifications", async () => {
   for (let i = 0; i < 3; i++) {
     await alice._sendNotification(new NotificationMessage()
         .setTimestamp(Date.now())
-        .setTitle("Test title")
-        .setMessage("Test message"));
+        .setTitle("Test title " + i)
+        .setMessage("Test message " + i));
   }
 
   // test notification
   await wait(1000);
-  assert.equal(notifications.length, 3);
+  assert(notifications.length >= 3);
   for (let i = 0; i < 3; i++) {
     assert(notifications[i].getTimestamp() > 0);
-    assert.equal(notifications[i].getTitle(), "Test title");
-    assert.equal(notifications[i].getMessage(), "Test message");
+    assert.equal(notifications[i].getTitle(), "Test title " + i);
+    assert.equal(notifications[i].getMessage(), "Test message " + i);
   }
 });
 
@@ -790,7 +762,7 @@ test("Handles unexpected errors during trade initialization", async () => {
     let paymentAccount = await createCryptoPaymentAccount(traders[1]);
     wait(3000).then(async function() {
       try {
-        let traderWallet = await monerojs.connectToWalletRpc("http://localhost:" + traders[1].getWalletRpcPort(), "rpc_user", "abc123"); // TODO: don't hardcode here, protect wallet rpc based on account password
+        let traderWallet = await monerojs.connectToWalletRpc("http://localhost:" + traders[1].getWalletRpcPort(), TestConfig.defaultHavenod.walletUsername, TestConfig.defaultHavenod.accountPassword);
         for (let frozenOutput of await traderWallet.getOutputs({isFrozen: true})) await traderWallet.thawOutput(frozenOutput.getKeyImage().getHex());
         console.log("Sweeping trade funds");
         await traderWallet.sweepUnlocked({address: await traderWallet.getPrimaryAddress(), relay: true});
@@ -824,7 +796,7 @@ test("Handles unexpected errors during trade initialization", async () => {
     // trader 0 spends trade funds then trader 2 takes offer
     wait(3000).then(async function() {
       try {
-        let traderWallet = await monerojs.connectToWalletRpc("http://localhost:" + traders[0].getWalletRpcPort(), "rpc_user", "abc123"); // TODO: don't hardcode here, protect wallet rpc based on account password
+        let traderWallet = await monerojs.connectToWalletRpc("http://localhost:" + traders[0].getWalletRpcPort(), TestConfig.defaultHavenod.walletUsername, TestConfig.defaultHavenod.accountPassword);
         for (let frozenOutput of await traderWallet.getOutputs({isFrozen: true})) await traderWallet.thawOutput(frozenOutput.getKeyImage().getHex());
         console.log("Sweeping offer funds");
         await traderWallet.sweepUnlocked({address: await traderWallet.getPrimaryAddress(), relay: true});
@@ -876,7 +848,7 @@ test("Cannot make or take offer with insufficient unlocked funds", async () => {
     } catch (err) {
       let errTyped = err as grpcWeb.RpcError;
       assert.equal(errTyped.code, 2);
-      assert(errTyped.message.includes("not enough money"));
+      assert(err.message.includes("not enough money"), "Unexpected error: " + err.message);
     }
     
     // alice posts offer
@@ -897,7 +869,7 @@ test("Cannot make or take offer with insufficient unlocked funds", async () => {
       throw new Error("Should have failed taking offer with insufficient funds")
     } catch (err) {
       let errTyped = err as grpcWeb.RpcError;
-      assert(errTyped.message.includes("not enough money"), "Unexpected error: " + errTyped.message); // TODO (woodser): error message does not contain stacktrace
+      assert(errTyped.message.includes("not enough money"), "Unexpected error: " + errTyped.message);
       assert.equal(errTyped.code, 2);
     }
     
@@ -1047,20 +1019,6 @@ test("Can complete a trade", async () => {
 
 // ------------------------------- HELPERS ------------------------------------
 
-function getConnection(connections: UriConnection[], uri: string): UriConnection | undefined {
-  for (let connection of connections) if (connection.getUri() === uri) return connection;
-  return undefined;
-}
-
-function testConnection(connection: UriConnection, uri?: string, onlineStatus?: OnlineStatus, authenticationStatus?: AuthenticationStatus, priority?: number) {
-  if (uri) assert.equal(connection.getUri(), uri);
-  assert.equal(connection.getPassword(), ""); // TODO (woodser): undefined instead of ""?
-  assert.equal(connection.getUsername(), "");
-  if (onlineStatus !== undefined) assert.equal(connection.getOnlineStatus(), onlineStatus);
-  if (authenticationStatus !== undefined) assert.equal(connection.getAuthenticationStatus(), authenticationStatus);
-  if (priority !== undefined) assert.equal(connection.getPriority(), priority);
-}
-
 async function initHavenoDaemons(numDaemons: number, config?: any) {
   let traderPromises: Promise<HavenoDaemon>[] = [];
   for (let i = 0; i < numDaemons; i++) traderPromises.push(initHavenoDaemon(config));
@@ -1071,30 +1029,18 @@ async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
   config = Object.assign({}, TestConfig.defaultHavenod, config);
   if (!config.appName) config.appName = "haveno-XMR_STAGENET_instance_" + GenUtils.getUUID();
   
-  async function getAvailablePort(): Promise<number> {
-    return new Promise(function(resolve, reject) {
-      let srv = net.createServer();
-      srv.listen(0, function() {
-        let port = srv.address().port;
-        srv.close(function() {
-          resolve(port);
-        });
-      });
-    });
-  }
-  
   // connect to existing server or start new process
   let havenod;
   try {
     
     // try to connect to existing server
-    havenod = new HavenoDaemon(config.uri, config.apiPassword);
+    havenod = new HavenoDaemon(config.url, config.apiPassword);
     await havenod.getVersion();
   } catch (err) {
     
     // get port for haveno process
     let proxyPort = "";
-    if (config.uri) proxyPort = new URL(config.uri).port
+    if (config.url) proxyPort = new URL(config.url).port
     else {
       for (let port of Array.from(TestConfig.proxyPorts.keys())) {
         if (port === "8079" || port === "8080" || port === "8081") continue; // reserved for arbitrator, alice, and bob
@@ -1117,8 +1063,8 @@ async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
       "--appName", config.appName,
       "--apiPassword", "apitest",
       "--apiPort", TestConfig.proxyPorts.get(proxyPort)![0],
-      "--walletRpcBindPort", config.walletUri ? new URL(config.walletUri).port : "" + await getAvailablePort(), // use configured port if given
-      "--passwordRequired", (config.passwordRequired ? "true" : "false")
+      "--walletRpcBindPort", config.walletUrl ? new URL(config.walletUrl).port : "" + await getAvailablePort(), // use configured port if given
+      "--passwordRequired", (config.accountPasswordRequired ? "true" : "false")
     ];
     havenod = await HavenoDaemon.startProcess(TestConfig.haveno.path, cmd, "http://localhost:" + proxyPort, config.logProcessOutput);
     HAVENO_PROCESSES.push(havenod);
@@ -1127,35 +1073,31 @@ async function initHavenoDaemon(config?: any): Promise<HavenoDaemon> {
   // open account if configured
   if (config.autoLogin) await initHavenoAccount(havenod, config.accountPassword);
   return havenod;
+  
+  async function getAvailablePort(): Promise<number> {
+    return new Promise(function(resolve, reject) {
+      let srv = net.createServer();
+      srv.listen(0, function() {
+        let port = srv.address().port;
+        srv.close(function() {
+          resolve(port);
+        });
+      });
+    });
+  }
 }
 
 /**
  * Release a Haveno process for reuse and try to shutdown.
  */
 async function releaseHavenoProcess(havenod: HavenoDaemon) {
-  console.log("releaseHavenoProcess 1");
   GenUtils.remove(HAVENO_PROCESSES, havenod);
-  console.log("releaseHavenoProcess 2");
-  GenUtils.remove(HAVENO_PROCESS_PORTS, new URL(havenod.getUrl()).port); // TODO (woodser): standardize to uri
-  console.log("releaseHavenoProcess 3");
+  GenUtils.remove(HAVENO_PROCESS_PORTS, new URL(havenod.getUrl()).port); // TODO (woodser): standardize to url
   try {
-    console.log("Shuttind down server!");
     await havenod.shutdownServer();
-    console.log("Done shutting down server!");
   } catch (err) {
     assert.equal(err.message, OFFLINE_ERR_MSG);
   }
-}
-
-// TODO: havenod.isOnline() or havenod.isConnected()
-async function isOnline(havenod: HavenoDaemon): Promise<boolean> {
-   try {
-      await havenod.getVersion();
-      return true;
-    } catch (err) {
-      assert.equal(err.message, OFFLINE_ERR_MSG);
-      return false;
-    }   
 }
 
 /**
@@ -1174,7 +1116,7 @@ async function initHavenoAccount(havenod: HavenoDaemon, password: string) {
 async function initFundingWallet() {
   
   // init client connected to monero-wallet-rpc
-  fundingWallet = await monerojs.connectToWalletRpc(TestConfig.fundingWallet.uri, TestConfig.fundingWallet.username, TestConfig.fundingWallet.password);
+  fundingWallet = await monerojs.connectToWalletRpc(TestConfig.fundingWallet.url, TestConfig.fundingWallet.username, TestConfig.fundingWallet.password);
   
   // check if wallet is open
   let walletIsOpen = false
@@ -1318,6 +1260,20 @@ function getNotifications(notifications: NotificationMessage[], notificationType
      }
   }
   return filteredNotifications;
+}
+
+function getConnection(connections: UrlConnection[], url: string): UrlConnection | undefined {
+  for (let connection of connections) if (connection.getUrl() === url) return connection;
+  return undefined;
+}
+
+function testConnection(connection: UrlConnection, url?: string, onlineStatus?: OnlineStatus, authenticationStatus?: AuthenticationStatus, priority?: number) {
+  if (url) assert.equal(connection.getUrl(), url);
+  assert.equal(connection.getPassword(), ""); // TODO (woodser): undefined instead of ""?
+  assert.equal(connection.getUsername(), "");
+  if (onlineStatus !== undefined) assert.equal(connection.getOnlineStatus(), onlineStatus);
+  if (authenticationStatus !== undefined) assert.equal(connection.getAuthenticationStatus(), authenticationStatus);
+  if (priority !== undefined) assert.equal(connection.getPriority(), priority);
 }
 
 function testTx(tx: XmrTx, ctx: TxContext) {

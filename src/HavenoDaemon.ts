@@ -2,7 +2,7 @@ import {HavenoUtils} from "./utils/HavenoUtils";
 import {TaskLooper} from "./utils/TaskLooper";
 import * as grpcWeb from 'grpc-web';
 import {GetVersionClient, AccountClient, MoneroConnectionsClient, DisputeAgentsClient, NotificationsClient, WalletsClient, PriceClient, OffersClient, PaymentAccountsClient, TradesClient, ShutdownServerClient} from './protobuf/GrpcServiceClientPb';
-import {GetVersionRequest, GetVersionReply, IsAppInitializedRequest, IsAppInitializedReply, RegisterDisputeAgentRequest, MarketPriceRequest, MarketPriceReply, MarketPricesRequest, MarketPricesReply, MarketPriceInfo, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetTradesRequest, GetTradesReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest, XmrTx, GetXmrTxsRequest, GetXmrTxsReply, XmrDestination, CreateXmrTxRequest, CreateXmrTxReply, RelayXmrTxRequest, RelayXmrTxReply, CreateAccountRequest, AccountExistsRequest, AccountExistsReply, DeleteAccountRequest, OpenAccountRequest, IsAccountOpenRequest, IsAccountOpenReply, CloseAccountRequest, ChangePasswordRequest, BackupAccountRequest, BackupAccountReply, RestoreAccountRequest, StopRequest, NotificationMessage, RegisterNotificationListenerRequest, SendNotificationRequest, UriConnection, AddConnectionRequest, RemoveConnectionRequest, GetConnectionRequest, GetConnectionsRequest, SetConnectionRequest, CheckConnectionRequest, CheckConnectionsReply, CheckConnectionsRequest, StartCheckingConnectionsRequest, StopCheckingConnectionsRequest, GetBestAvailableConnectionRequest, SetAutoSwitchRequest, CheckConnectionReply, GetConnectionsReply, GetConnectionReply, GetBestAvailableConnectionReply} from './protobuf/grpc_pb';
+import {GetVersionRequest, GetVersionReply, IsAppInitializedRequest, IsAppInitializedReply, RegisterDisputeAgentRequest, MarketPriceRequest, MarketPriceReply, MarketPricesRequest, MarketPricesReply, MarketPriceInfo, GetBalancesRequest, GetBalancesReply, XmrBalanceInfo, GetOffersRequest, GetOffersReply, OfferInfo, GetPaymentAccountsRequest, GetPaymentAccountsReply, CreateCryptoCurrencyPaymentAccountRequest, CreateCryptoCurrencyPaymentAccountReply, CreateOfferRequest, CreateOfferReply, CancelOfferRequest, TakeOfferRequest, TakeOfferReply, TradeInfo, GetTradeRequest, GetTradeReply, GetTradesRequest, GetTradesReply, GetNewDepositSubaddressRequest, GetNewDepositSubaddressReply, ConfirmPaymentStartedRequest, ConfirmPaymentReceivedRequest, XmrTx, GetXmrTxsRequest, GetXmrTxsReply, XmrDestination, CreateXmrTxRequest, CreateXmrTxReply, RelayXmrTxRequest, RelayXmrTxReply, CreateAccountRequest, AccountExistsRequest, AccountExistsReply, DeleteAccountRequest, OpenAccountRequest, IsAccountOpenRequest, IsAccountOpenReply, CloseAccountRequest, ChangePasswordRequest, BackupAccountRequest, BackupAccountReply, RestoreAccountRequest, StopRequest, NotificationMessage, RegisterNotificationListenerRequest, SendNotificationRequest, UrlConnection, AddConnectionRequest, RemoveConnectionRequest, GetConnectionRequest, GetConnectionsRequest, SetConnectionRequest, CheckConnectionRequest, CheckConnectionsReply, CheckConnectionsRequest, StartCheckingConnectionsRequest, StopCheckingConnectionsRequest, GetBestAvailableConnectionRequest, SetAutoSwitchRequest, CheckConnectionReply, GetConnectionsReply, GetConnectionReply, GetBestAvailableConnectionReply} from './protobuf/grpc_pb';
 import {PaymentAccount, AvailabilityResult} from './protobuf/pb_pb';
 const console = require('console');
 
@@ -29,9 +29,10 @@ class HavenoDaemon {
   _url: string;
   _password: string;
   _process: any;
-  _processLogging: boolean = false;
+  _processLogging = false;
   _walletRpcPort: number|undefined;
   _notificationListeners: ((notification: NotificationMessage) => void)[] = [];
+  _registerNotificationListenerCalled = false;
   _keepAliveLooper: any;
   _keepAlivePeriodMs: number = 60000;
   
@@ -52,15 +53,15 @@ class HavenoDaemon {
     this._url = url;
     this._password = password;
     this._getVersionClient = new GetVersionClient(this._url);
-    this._disputeAgentsClient = new DisputeAgentsClient(this._url);
+    this._accountClient = new AccountClient(this._url);
     this._moneroConnectionsClient = new MoneroConnectionsClient(this._url)
+    this._disputeAgentsClient = new DisputeAgentsClient(this._url);
     this._walletsClient = new WalletsClient(this._url);
     this._priceClient = new PriceClient(this._url);
     this._paymentAccountsClient = new PaymentAccountsClient(this._url);
     this._offersClient = new OffersClient(this._url);
     this._tradesClient = new TradesClient(this._url);
     this._notificationsClient = new NotificationsClient(this._url);
-    this._accountClient = new AccountClient(this._url);
     this._shutdownServerClient = new ShutdownServerClient(this._url);
   }
   
@@ -77,7 +78,7 @@ class HavenoDaemon {
     
     // return promise which resolves after starting havenod
     return new Promise(function(resolve, reject) {
-      HavenoUtils.log(2, "Starting Haveno process: " + cmd + " on proxy uri: " + url);
+      HavenoUtils.log(2, "Starting Haveno process: " + cmd + " on proxy url: " + url);
       
       // state variables
       let output = "";
@@ -134,13 +135,11 @@ class HavenoDaemon {
       
       // handle exit
       childProcess.on("exit", async function(code: any) {
-        console.log('EXIT CALLED!!!');
         if (!isStarted) await rejectStartup(new Error("Haveno process terminated with exit code " + code + (output ? ":\n\n" + output : "")));
       });
       
       // handle error
       childProcess.on("error", async function(err: any) {
-        console.log('ERROR CALLED!!!');
         if (err.message.indexOf("ENOENT") >= 0) reject(new Error("haveno-daemon does not exist at path '" + cmd[0] + "'"));
         if (!isStarted) await rejectStartup(err);
       });
@@ -171,7 +170,7 @@ class HavenoDaemon {
   getProcess() {
     return this._process;
   }
-
+  
   /**
    * Enable or disable process logging.
    * 
@@ -220,6 +219,20 @@ class HavenoDaemon {
         else resolve(response.getVersion());
       });
     });
+  }
+  
+  /**
+   * Indicates if connected and authenticated with the Haveno daemon.
+   * 
+   * @return {boolean} true if connected with the Haveno daemon, false otherwise
+   */
+  async isConnectedToDaemon(): Promise<boolean> {
+    try {
+      await this.getVersion();
+      return true;
+    } catch (err) {
+      return false;
+    }
   }
   
   /**
@@ -379,18 +392,41 @@ class HavenoDaemon {
    */
   async addNotificationListener(listener: (notification: NotificationMessage) => void): Promise<void> {
     this._notificationListeners.push(listener);
-    if (this._notificationListeners.length === 1) return this._registerNotificationListener();
+    return this._registerNotificationListenerOnce();
+  }
+  
+  /**
+   * Remove a notification listener.
+   * 
+   * @param {HavenoDaemonListener} listener - the notification listener to remove
+   */
+  async removeNotificationListener(listener: (notification: NotificationMessage) => void): Promise<void> {
+    let idx = this._notificationListeners.indexOf(listener);
+    if (idx > -1) this._notificationListeners.splice(idx, 1);
+    else throw new Error("Notification listener is not registered");
+  }
+  
+  /**
+   * Indicates if connected to the Monero network based on last connection check.
+   * 
+   * @return {boolean} true if connected to the Monero network, false otherwise
+   */
+  async isConnectedToMonero(): Promise<boolean> {
+    let connection = await this.getMoneroConnection();
+    return connection !== undefined && 
+           connection.getOnlineStatus()! === UrlConnection.OnlineStatus.ONLINE && 
+           connection.getAuthenticationStatus()! !== UrlConnection.AuthenticationStatus.NOT_AUTHENTICATED;
   }
 
   /**
    * Add a Monero daemon connection.
    *
-   * @param {string | UriConnection} connection - daemon uri or connection to add
+   * @param {string | UrlConnection} connection - daemon url or connection to add
    */
-  async addMoneroConnection(connection: string | UriConnection): Promise<void> {
+  async addMoneroConnection(connection: string | UrlConnection): Promise<void> {
     let that = this;
     return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.addConnection(new AddConnectionRequest().setConnection(typeof connection === "string" ? new UriConnection().setUri(connection) : connection), {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._moneroConnectionsClient.addConnection(new AddConnectionRequest().setConnection(typeof connection === "string" ? new UrlConnection().setUrl(connection) : connection), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
@@ -400,12 +436,12 @@ class HavenoDaemon {
   /**
    * Remove a Monero daemon connection.
    *
-   * @param {string} uri - uri of the daemon connection to remove
+   * @param {string} url - url of the daemon connection to remove
    */
-  async removeMoneroConnection(uri: string): Promise<void> {
+  async removeMoneroConnection(url: string): Promise<void> {
     let that = this;
     return new Promise(function(resolve, reject) {
-      that._moneroConnectionsClient.removeConnection(new RemoveConnectionRequest().setUri(uri), {password: that._password}, function(err: grpcWeb.RpcError) {
+      that._moneroConnectionsClient.removeConnection(new RemoveConnectionRequest().setUrl(url), {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
         else resolve();
       });
@@ -415,9 +451,9 @@ class HavenoDaemon {
   /**
    * Get the current Monero daemon connection.
    *
-   * @return {UriConnection | undefined} the current daemon connection, undefined if no current connection
+   * @return {UrlConnection | undefined} the current daemon connection, undefined if no current connection
    */
-  async getMoneroConnection(): Promise<UriConnection | undefined> {
+  async getMoneroConnection(): Promise<UrlConnection | undefined> {
     let that = this;
     return new Promise(function(resolve, reject) {
       that._moneroConnectionsClient.getConnection(new GetConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetConnectionReply) {
@@ -430,9 +466,9 @@ class HavenoDaemon {
   /**
    * Get all Monero daemon connections.
    *
-   * @return {UriConnection[]} all daemon connections
+   * @return {UrlConnection[]} all daemon connections
    */
-  async getMoneroConnections(): Promise<UriConnection[]> {
+  async getMoneroConnections(): Promise<UrlConnection[]> {
     let that = this;
     return new Promise(function(resolve, reject) {
       that._moneroConnectionsClient.getConnections(new GetConnectionsRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetConnectionsReply) {
@@ -447,15 +483,15 @@ class HavenoDaemon {
    * 
    * Add the connection if not previously seen.
    * If the connection is provided as string, connect to the URI with any previously set credentials and priority.
-   * If the connection is provided as UriConnection, overwrite any previously set credentials and priority.
+   * If the connection is provided as UrlConnection, overwrite any previously set credentials and priority.
    * If undefined connection provided, disconnect the client.
    *
-   * @param {string | UriConnection} connection - connection to set as current
+   * @param {string | UrlConnection} connection - connection to set as current
    */
-  async setMoneroConnection(connection?: string | UriConnection): Promise<void> {
+  async setMoneroConnection(connection?: string | UrlConnection): Promise<void> {
     let that = this;
     let request = new SetConnectionRequest();
-    if (typeof connection === "string") request.setUri(connection);
+    if (typeof connection === "string") request.setUrl(connection);
     else request.setConnection(connection);
     return new Promise(function(resolve, reject) {
       that._moneroConnectionsClient.setConnection(request, {password: that._password}, function(err: grpcWeb.RpcError) {
@@ -470,9 +506,9 @@ class HavenoDaemon {
    *
    * If disconnected and auto switch enabled, switch to the best available connection and return its status.
    *
-   * @return {UriConnection | undefined} the current daemon connection status, undefined if no current connection
+   * @return {UrlConnection | undefined} the current daemon connection status, undefined if no current connection
    */
-  async checkMoneroConnection(): Promise<UriConnection | undefined> {
+  async checkMoneroConnection(): Promise<UrlConnection | undefined> {
     let that = this;
     return new Promise(function(resolve, reject) {
       that._moneroConnectionsClient.checkConnection(new CheckConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: CheckConnectionReply) {
@@ -485,9 +521,9 @@ class HavenoDaemon {
   /**
    * Check all Monero daemon connections.
    *
-   * @return {UriConnection[]} status of all managed connections.
+   * @return {UrlConnection[]} status of all managed connections.
    */
-  async checkMoneroConnections(): Promise<UriConnection[]> {
+  async checkMoneroConnections(): Promise<UrlConnection[]> {
     let that = this;
     return new Promise(function(resolve, reject) {
       that._moneroConnectionsClient.checkConnections(new CheckConnectionsRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: CheckConnectionsReply) {
@@ -528,9 +564,9 @@ class HavenoDaemon {
   /**
    * Get the best available connection in order of priority then response time.
    *
-   * @return {UriConnection | undefined} the best available connection in order of priority then response time, undefined if no connections available
+   * @return {UrlConnection | undefined} the best available connection in order of priority then response time, undefined if no connections available
    */
-  async getBestAvailableConnection(): Promise<UriConnection | undefined> {
+  async getBestAvailableConnection(): Promise<UrlConnection | undefined> {
     let that = this;
     return new Promise(function(resolve, reject) {
       that._moneroConnectionsClient.getBestAvailableConnection(new GetBestAvailableConnectionRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetBestAvailableConnectionReply) {
@@ -957,14 +993,16 @@ class HavenoDaemon {
   async _awaitAppInitialized(): Promise<void> {
     let that = this;
     return new Promise(async function(resolve) {
-      await that.addNotificationListener(notification => {
-        if (notification.getType() === NotificationMessage.NotificationType.APP_INITIALIZED) {
-            console.log("RECEIVED NOTIFICATION THAT APP INITIALIZED!");
-            resolve(); // TODO: might resolve twice?
-        }
-      });
-      if (await that._isAppInitialized()) {
-        console.log("app fully initialized according to grpc api!");
+      let isResolved = false;
+      let listener = async function(notification: NotificationMessage) {
+        if (notification.getType() === NotificationMessage.NotificationType.APP_INITIALIZED) await resolveOnce();
+      }
+      await that.addNotificationListener(listener);
+      if (await that._isAppInitialized()) await resolveOnce();
+      async function resolveOnce() {
+        if (isResolved) return;
+        isResolved = true;
+        await that.removeNotificationListener(listener);
         resolve();
       }
     });
@@ -985,7 +1023,9 @@ class HavenoDaemon {
    * Due to the nature of grpc streaming, this method returns a promise
    * which may be resolved before the listener is actually registered.
    */
-  async _registerNotificationListener(): Promise<void> {
+  async _registerNotificationListenerOnce(): Promise<void> {
+    if (this._registerNotificationListenerCalled) return;
+    else this._registerNotificationListenerCalled = true;
     let that = this;
     return new Promise(function(resolve) {
       
@@ -1010,8 +1050,7 @@ class HavenoDaemon {
       });
       that._keepAliveLooper.start(that._keepAlivePeriodMs);
       
-      // TODO: call returns before listener registered
-      setTimeout(function() { resolve(); }, 1000);
+      setTimeout(resolve, 1000); // TODO: call returns before listener registered
     });
   }
 
@@ -1041,10 +1080,9 @@ class HavenoDaemon {
       .setTotalLength(totalLength)
       .setHasMore(hasMore);
     return new Promise(function(resolve, reject) {
-      console.log("Sending restoreAccount() request!");
       that._accountClient.restoreAccount(request, {password: that._password}, function(err: grpcWeb.RpcError) {
         if (err) reject(err);
-        else setTimeout(resolve, 5000); // restore needs to wait for process to shutdown. improve this to be more accurate
+        else resolve();
       });
     });
   }
