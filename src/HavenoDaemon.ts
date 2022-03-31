@@ -621,7 +621,7 @@ class HavenoDaemon {
   async getBalances(): Promise<XmrBalanceInfo> {
     let that = this;
     return new Promise(function(resolve, reject) {
-      that._walletsClient.getBalances(new GetBalancesRequest(), {password: that._password}, function(err: grpcWeb.RpcError, response: GetBalancesReply) {
+      that._walletsClient.getBalances(new GetBalancesRequest().setCurrencyCode("XMR"), {password: that._password}, function(err: grpcWeb.RpcError, response: GetBalancesReply) {
         if (err) reject(err);
         else resolve(response.getBalances()!.getXmr()!);
       });
@@ -960,7 +960,7 @@ class HavenoDaemon {
     return new Promise(function(resolve, reject) {
       that._tradesClient.takeOffer(request, {password: that._password}, function(err: grpcWeb.RpcError, response: TakeOfferReply) {
         if (err) reject(err);
-        else if (response.getFailureReason() && response.getFailureReason()!.getAvailabilityResult() !== AvailabilityResult.AVAILABLE) reject(response.getFailureReason()!.getDescription());
+        else if (response.getFailureReason() && response.getFailureReason()!.getAvailabilityResult() !== AvailabilityResult.AVAILABLE) reject(new Error(response.getFailureReason()!.getDescription())); // TODO: api should throw grpcWeb.RpcError
         else resolve(response.getTrade()!);
       });
     });
