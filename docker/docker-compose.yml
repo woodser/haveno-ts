@@ -1,8 +1,8 @@
-version: '3'
+version: '3.9'
 
 services:
   envoy:
-    image: envoyproxy/envoy-dev:8a2143613d43d17d1eb35a24b4a4a4c432215606
+    image: envoyproxy/envoy-dev:latest
     container_name: envoy
     extra_hosts:
       - "host.docker.internal:host-gateway"
