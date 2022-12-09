@@ -151,7 +151,7 @@ services:
       - seed1
 
   pricenode:
-    build: haveno/
+    build: pricenode/
     container_name: pricenode
     entrypoint: [ "./haveno-pricenode" ]
     network_mode: "host"

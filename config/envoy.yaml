@@ -1,4 +1,4 @@
-# envoy configuration to run alice ui
+# envoy configuration to run user1 ui
 
 admin:
   access_log_path: /tmp/admin_access.log
@@ -7,7 +7,7 @@ admin:
 
 static_resources:
   listeners:
-  - name: alice_listener
+  - name: user1_listener
     address:
       socket_address: { address: 0.0.0.0, port_value: 8080 }
     filter_chains:
@@ -25,7 +25,7 @@ static_resources:
               routes:
               - match: { prefix: "/" }
                 route:
-                  cluster: alice_service
+                  cluster: user1_service
                   timeout: 0s
                   max_stream_duration:
                     grpc_timeout_header_max: 0s
@@ -47,7 +47,7 @@ static_resources:
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
   clusters:
-  - name: alice_service
+  - name: user1_service
     connect_timeout: 0.25s
     type: logical_dns
     http2_protocol_options: {}
