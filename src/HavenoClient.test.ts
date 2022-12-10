@@ -115,7 +115,7 @@ const TestConfig = {
     walletSyncPeriodMs: 5000, // TODO (woodser): auto adjust higher if using remote connection
     daemonPollPeriodMs: 15000,
     maxWalletStartupMs: 10000, // TODO (woodser): make shorter by switching to jni
-    maxTimePeerNoticeMs: 10000,
+    maxTimePeerNoticeMs: 5000,
     maxCpuPct: 0.25,
     assetCodes: ["USD", "GBP", "EUR", "ETH", "BTC", "BCH", "LTC"], // primary asset codes
     cryptoAddresses: [{
@@ -297,6 +297,10 @@ beforeAll(async () => {
   HavenoUtils.log(0, "Funding wallet primary address: " + await fundingWallet.getPrimaryAddress());
   HavenoUtils.log(0, "Funding wallet new subaddress: " + subaddress.getAddress());
 
+  // initialize monerod
+  monerod = await monerojs.connectToDaemonRpc(TestConfig.monerod.url, TestConfig.monerod.username, TestConfig.monerod.password);
+  await mineToHeight(160); // initialize blockchain to latest block type
+
   // start configured haveno daemons
   const promises: Promise<HavenoClient>[] = [];
   for (const config of TestConfig.startupHavenods) promises.push(initHaveno(config));
@@ -313,18 +317,15 @@ beforeAll(async () => {
   TestConfig.trade.maker = user1;
   TestConfig.trade.taker = user2;
 
-  // register arbitrator dispute agent
-  await arbitrator.registerDisputeAgent("arbitrator", getArbitratorPrivKey(0));
-
-  // connect monero clients
-  monerod = await monerojs.connectToDaemonRpc(TestConfig.monerod.url, TestConfig.monerod.username, TestConfig.monerod.password);
+  // connect client wallets
   user1Wallet = await monerojs.connectToWalletRpc(TestConfig.startupHavenods[1].walletUrl, TestConfig.defaultHavenod.walletUsername, TestConfig.startupHavenods[1].accountPasswordRequired ? TestConfig.startupHavenods[1].accountPassword : TestConfig.defaultHavenod.walletDefaultPassword);
   user2Wallet = await monerojs.connectToWalletRpc(TestConfig.startupHavenods[2].walletUrl, TestConfig.defaultHavenod.walletUsername, TestConfig.startupHavenods[2].accountPasswordRequired ? TestConfig.startupHavenods[2].accountPassword : TestConfig.defaultHavenod.walletDefaultPassword);
 
+  // register arbitrator dispute agent
+  await arbitrator.registerDisputeAgent("arbitrator", getArbitratorPrivKey(0));
+
   // create test data directory if it doesn't exist
   if (!fs.existsSync(TestConfig.testDataDir)) fs.mkdirSync(TestConfig.testDataDir);
-
-  await mineToHeight(161)
 });
 
 beforeEach(async () => {
@@ -1262,7 +1263,7 @@ test("Can complete trades at the same time", async () => {
   await executeTrades(getTradeContexts(6));
 });
 
-test.skip("Can complete all trade combinations", async () => {
+test("Can complete all trade combinations", async () => {
 
   // generate trade context for each combination (buyer/seller, maker/taker, dispute(s), dispute winner)
   const ctxs: TradeContext[] = [];
@@ -1615,6 +1616,7 @@ test("Selects arbitrators which are online, registered, and least used", async (
   await arbitrator2.registerDisputeAgent("arbitrator", getArbitratorPrivKey(1)); // TODO: re-registering with same address corrupts messages (Cannot decrypt) because existing pub key; overwrite? or throw when registration fails because dispute map can't be updated
   await wait(TestConfig.walletSyncPeriodMs * 2);
 
+  // get internal api addresses
   const arbitratorApiUrl = "localhost:" + TestConfig.ports.get(getPort(arbitrator.getUrl()))![1]; // TODO: havenod.getApiUrl()?
   const arbitrator2ApiUrl = "localhost:" + TestConfig.ports.get(getPort(arbitrator2.getUrl()))![1];
 
@@ -2195,7 +2197,7 @@ async function takeOffer(ctx: TradeContext): Promise<TradeInfo> {
   await wait(TestConfig.maxTimePeerNoticeMs);
   const tradeNotifications = getNotifications(makerNotifications, NotificationMessage.NotificationType.TRADE_UPDATE, trade.getTradeId());
   expect(tradeNotifications.length).toBe(1);
-  assert(GenUtils.arrayContains(["DEPOSITS_PUBLISHED", "DEPOSITS_CONFIRMED"], tradeNotifications[0].getTrade()!.getPhase()));
+  assert(GenUtils.arrayContains(["DEPOSITS_PUBLISHED", "DEPOSITS_CONFIRMED", "DEPOSITS_UNLOCKED"], tradeNotifications[0].getTrade()!.getPhase(), "Unexpected trade phase: " + tradeNotifications[0].getTrade()!.getPhase()));
   expect(tradeNotifications[0].getTitle()).toEqual("Offer Taken");
   expect(tradeNotifications[0].getMessage()).toEqual("Your offer " + ctx.offerId + " has been accepted");
 
@@ -2203,14 +2205,14 @@ async function takeOffer(ctx: TradeContext): Promise<TradeInfo> {
 
   // taker can get trade
   let fetchedTrade: TradeInfo = await ctx.taker!.getTrade(trade.getTradeId());
-  assert(GenUtils.arrayContains(["DEPOSITS_PUBLISHED", "DEPOSITS_CONFIRMED"], fetchedTrade.getPhase()));
+  assert(GenUtils.arrayContains(["DEPOSITS_PUBLISHED", "DEPOSITS_CONFIRMED", "DEPOSITS_UNLOCKED"], fetchedTrade.getPhase()), "Unexpected trade phase: " + fetchedTrade.getPhase());
   // TODO: test fetched trade
 
   // taker is notified of balance change
 
   // maker can get trade
   fetchedTrade = await ctx.maker!.getTrade(trade.getTradeId());
-  assert(GenUtils.arrayContains(["DEPOSITS_PUBLISHED", "DEPOSITS_CONFIRMED"], fetchedTrade.getPhase()));
+  assert(GenUtils.arrayContains(["DEPOSITS_PUBLISHED", "DEPOSITS_CONFIRMED", "DEPOSITS_UNLOCKED"], fetchedTrade.getPhase()), "Unexpected trade phase: " + fetchedTrade.getPhase());
   return trade;
 }
 
