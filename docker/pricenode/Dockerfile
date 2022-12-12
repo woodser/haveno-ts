@@ -6,16 +6,16 @@ RUN set -ex && \
         make \
         git
 
-RUN set -ex && adduser --system --group --disabled-password seednode && \
-    mkdir -p /home/seednode && \
-    chown -R seednode:seednode /home/seednode
+RUN set -ex && adduser --system --group --disabled-password pricenode && \
+    mkdir -p /home/pricenode && \
+    chown -R pricenode:pricenode /home/pricenode
 
-USER seednode
+USER pricenode
 
-RUN set -ex && git clone --recursive https://github.com/haveno-dex/haveno-pricenode.git /home/seednode
+RUN set -ex && git clone --recursive https://github.com/haveno-dex/haveno-pricenode.git /home/pricenode
 
-WORKDIR /home/seednode
+WORKDIR /home/pricenode
 
 RUN gradle clean build -x test
 
-ENTRYPOINT [ "./haveno-seednode" ]
+ENTRYPOINT [ "./haveno-pricenode" ]
