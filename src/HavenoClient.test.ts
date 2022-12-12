@@ -112,10 +112,10 @@ const TestConfig = {
         }
     ],
     maxFee: BigInt("75000000000"),
-    walletSyncPeriodMs: 10000, // TODO (woodser): auto adjust higher if using remote connection
+    walletSyncPeriodMs: 5000, // TODO (woodser): auto adjust higher if using remote connection
     daemonPollPeriodMs: 15000,
     maxWalletStartupMs: 10000, // TODO (woodser): make shorter by switching to jni
-    maxTimePeerNoticeMs: 10000,
+    maxTimePeerNoticeMs: 5000,
     maxCpuPct: 0.25,
     assetCodes: ["USD", "GBP", "EUR", "ETH", "BTC", "BCH", "LTC"], // primary asset codes
     cryptoAddresses: [{
