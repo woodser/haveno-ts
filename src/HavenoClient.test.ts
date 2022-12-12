@@ -1263,7 +1263,7 @@ test("Can complete trades at the same time", async () => {
   await executeTrades(getTradeContexts(6));
 });
 
-test("Can complete all trade combinations", async () => {
+test.skip("Can complete all trade combinations", async () => {
 
   // generate trade context for each combination (buyer/seller, maker/taker, dispute(s), dispute winner)
   const ctxs: TradeContext[] = [];
