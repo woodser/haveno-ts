@@ -347,12 +347,12 @@ afterAll(async () => {
 
 // ----------------------------------- TESTS ----------------------------------
 
-test("Can get the version", async () => {
+test("Can get the version (CI)", async () => {
   const version = await arbitrator.getVersion();
   expect(version).toEqual(TestConfig.haveno.version);
 });
 
-test("Can manage an account", async () => {
+test("Can manage an account (CI)", async () => {
   let user3: HavenoClient|undefined;
   let err: any;
   try {
@@ -469,7 +469,7 @@ test("Can manage an account", async () => {
   }
 });
 
-test("Can manage Monero daemon connections", async () => {
+test("Can manage Monero daemon connections (CI)", async () => {
   let monerod2: any;
   let user3: HavenoClient|undefined;
   let err: any;
@@ -620,7 +620,7 @@ test("Can manage Monero daemon connections", async () => {
   if (err) throw err;
 });
 
-test("Can start and stop a local Monero node", async() => {
+test("Can start and stop a local Monero node (CI)", async() => {
 
   // expect error stopping local node
   try {
@@ -711,7 +711,7 @@ test("Can start and stop a local Monero node", async() => {
 });
 
 // test wallet balances, transactions, deposit addresses, create and relay txs
-test("Has a Monero wallet", async () => {
+test("Has a Monero wallet (CI)", async () => {
 
   // get seed phrase
   const seed = await user1.getXmrSeed();
@@ -771,7 +771,7 @@ test("Has a Monero wallet", async () => {
   }
 });
 
-test("Can get balances", async () => {
+test("Can get balances (CI)", async () => {
   const balances: XmrBalanceInfo = await user1.getBalances();
   expect(BigInt(balances.getAvailableBalance())).toBeGreaterThanOrEqual(0);
   expect(BigInt(balances.getPendingBalance())).toBeGreaterThanOrEqual(0);
@@ -779,7 +779,7 @@ test("Can get balances", async () => {
   expect(BigInt(balances.getReservedTradeBalance())).toBeGreaterThanOrEqual(0);
 });
 
-test("Can receive push notifications", async () => {
+test("Can receive push notifications (CI)", async () => {
 
   // add notification listener
   const notifications: NotificationMessage[] = [];
@@ -805,7 +805,7 @@ test("Can receive push notifications", async () => {
   }
 });
 
-test("Can get supported assets and their payment methods", async() => {
+test("Can get supported assets and their payment methods (CI)", async() => {
   const assetCodes = await user1.getSupportedAssetCodes(); // TODO: replace with getSupportedAssets(): TradeCurrency[]
   for (const assetCode of assetCodes) {
     const paymentMethods = await user1.getPaymentMethods(assetCode);
@@ -813,7 +813,7 @@ test("Can get supported assets and their payment methods", async() => {
   }
 });
 
-test("Can get market prices", async () => {
+test("Can get market prices (CI)", async () => {
 
   // get all market prices
   const prices: MarketPriceInfo[] = await user1.getPrices();
@@ -846,7 +846,7 @@ test("Can get market prices", async () => {
     .toThrow('Currency not found: INVALID_CURRENCY');
 });
 
-test("Can get market depth", async () => {
+test("Can get market depth (CI)", async () => {
     const assetCode = "eth";
 
     // clear offers
@@ -915,7 +915,7 @@ test("Can get market depth", async () => {
         .toThrow('Currency not found: INVALID_CURRENCY');
 });
 
-test("Can register as an arbitrator", async () => {
+test("Can register as an arbitrator (CI)", async () => {
 
   // test bad dispute agent type
   try {
@@ -937,21 +937,21 @@ test("Can register as an arbitrator", async () => {
   await arbitrator.registerDisputeAgent("arbitrator", getArbitratorPrivKey(0));
 });
 
-test("Can get offers", async () => {
+test("Can get offers (CI)", async () => {
   for (const assetCode of TestConfig.assetCodes) {
     const offers: OfferInfo[] = await user1.getOffers(assetCode);
     for (const offer of offers)  testOffer(offer);
   }
 });
 
-test("Can get my offers", async () => {
+test("Can get my offers (CI)", async () => {
   for (const assetCode of TestConfig.assetCodes) {
     const offers: OfferInfo[] = await user1.getMyOffers(assetCode);
     for (const offer of offers)  testOffer(offer);
   }
 });
 
-test("Can get payment methods", async () => {
+test("Can get payment methods (CI)", async () => {
   const paymentMethods: PaymentMethod[] = await user1.getPaymentMethods();
   expect(paymentMethods.length).toBeGreaterThan(0);
   for (const paymentMethod of paymentMethods) {
@@ -962,7 +962,7 @@ test("Can get payment methods", async () => {
   }
 });
 
-test("Can get payment accounts", async () => {
+test("Can get payment accounts (CI)", async () => {
   const paymentAccounts: PaymentAccount[] = await user1.getPaymentAccounts();
   for (const paymentAccount of paymentAccounts) {
     if (paymentAccount.getPaymentAccountPayload()!.getCryptoCurrencyAccountPayload()) { // TODO (woodser): test non-crypto
@@ -973,7 +973,7 @@ test("Can get payment accounts", async () => {
 
 // TODO: rename ClearXChange to Zelle
 // TODO: FieldId represented as number
-test("Can validate payment account forms", async () => {
+test("Can validate payment account forms (CI)", async () => {
 
   // supported payment methods
   const expectedPaymentMethods = ["BLOCK_CHAINS", "REVOLUT", "SEPA", "SEPA_INSTANT", "TRANSFERWISE", "CLEAR_X_CHANGE", "SWIFT", "F2F", "STRIKE", "MONEY_GRAM", "FASTER_PAYMENTS", "UPHOLD", "PAXUM"];
@@ -1029,7 +1029,7 @@ test("Can validate payment account forms", async () => {
   }
 });
 
-test("Can create fiat payment accounts", async () => {
+test("Can create fiat payment accounts (CI)", async () => {
 
   // get payment account form
   const paymentMethodId = 'REVOLUT';
@@ -1060,7 +1060,7 @@ test("Can create fiat payment accounts", async () => {
   assert(found, "Payment account not found after adding");
 });
 
-test("Can create crypto payment accounts", async () => {
+test("Can create crypto payment accounts (CI)", async () => {
 
   // test each crypto
   for (const testAccount of TestConfig.cryptoAddresses) {
@@ -1103,11 +1103,11 @@ test("Can create crypto payment accounts", async () => {
   }
 });
 
-test("Can prepare for trading", async () => {
+test("Can prepare for trading (CI)", async () => {
   await prepareForTrading(4, user1, user2);
 });
 
-test("Can post and remove an offer", async () => {
+test("Can post and remove an offer (CI)", async () => {
 
   // wait for user1 to have unlocked balance to post offer
   await waitForAvailableBalance(BigInt("250000000000") * BigInt("2"), user1);
@@ -1167,7 +1167,7 @@ test("Can post and remove an offer", async () => {
 
 // TODO: support splitting outputs
 // TODO: provide number of confirmations in offer status
-test("Can schedule offers with locked funds", async () => {
+test("Can schedule offers with locked funds (CI)", async () => {
   let user3: HavenoClient|undefined;
   let err: any;
   try {
@@ -1259,11 +1259,11 @@ test("Can complete a trade", async () => {
   await executeTrade();
 });
 
-test("Can complete trades at the same time", async () => {
+test("Can complete trades at the same time (CI)", async () => {
   await executeTrades(getTradeContexts(6));
 });
 
-test.skip("Can complete all trade combinations", async () => {
+test.skip("Can complete all trade combinations (CI, stress)", async () => {
 
   // generate trade context for each combination (buyer/seller, maker/taker, dispute(s), dispute winner)
   const ctxs: TradeContext[] = [];
@@ -1299,7 +1299,7 @@ test.skip("Can complete all trade combinations", async () => {
   await executeTrades(ctxs);
 });
 
-test("Can go offline while completing a trade", async () => {
+test("Can go offline while completing a trade (CI)", async () => {
   let traders: HavenoClient[] = [];
   let ctx: TradeContext = {};
   let err: any;
@@ -1335,7 +1335,7 @@ test("Can go offline while completing a trade", async () => {
   if (err) throw err;
 });
 
-test("Can resolve disputes", async () => {
+test("Can resolve disputes (CI)", async () => {
 
   // take trades but stop before sending payment
   const ctxs = getTradeContexts(4);
@@ -1385,7 +1385,7 @@ test("Can resolve disputes", async () => {
   await executeTrades(ctxs, {concurrentTrades: true}); // TODO: running in parallel doesn't test balances before and after, but this test takes ~10 minutes in sequence. use test weight config
 });
 
-test("Cannot make or take offer with insufficient unlocked funds", async () => {
+test("Cannot make or take offer with insufficient unlocked funds (CI)", async () => {
   let user3: HavenoClient|undefined;
   let err: any;
   try {
