@@ -87,7 +87,7 @@ services:
       "--useLocalhostForP2P=true",
       "--useDevPrivilegeKeys=true",
       "--nodePort=3002",
-      "--appName=haveno-XMR_LOCAL_Seed2_2002",
+      "--appName=haveno-XMR_LOCAL_Seed2_3002",
     ]
     network_mode: "host"
     depends_on:
