@@ -26,7 +26,8 @@ let _client: HavenoClient;
 // -------------------------- BEFORE / AFTER TESTS ----------------------------
 
 beforeAll(async () => {
-  _client = new HavenoClient("http://localhost:8081");
+  console.log("Initializing...");
+  _client = new HavenoClient("http://localhost:9091");
 });
 
 beforeEach(async () => {
@@ -38,6 +39,8 @@ afterAll(async () => {
 });
 
 // ----------------------------------- TESTS ----------------------------------
+
+jest.setTimeout(100000);
 
 test("Can say hello", async () => {
   const msg = await _client.sayHello("bob");
