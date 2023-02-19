@@ -27,7 +27,7 @@ let _client: HavenoClient;
 
 beforeAll(async () => {
   console.log("Initializing...");
-  _client = new HavenoClient("http://localhost:9091");
+  _client = new HavenoClient("http://localhost:8080");
 });
 
 beforeEach(async () => {
