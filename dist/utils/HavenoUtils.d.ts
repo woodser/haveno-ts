@@ -1,4 +1,3 @@
-import { PaymentAccountForm, PaymentAccountFormField } from "../protobuf/pb_pb";
 /**
  * Collection of utilities for working with Haveno.
  */
@@ -33,44 +32,4 @@ export default class HavenoUtils {
      * @return {string} the formatted timestamp
      */
     static formatTimestamp(timestamp: number): string;
-    /**
-     * Kill the given process.
-     *
-     * TODO (woodser): move this to monero-javascript GenUtils.js as common utility
-     *
-     * @param {Process} process - the nodejs child process to child
-     * @param {String} signal - the kill signal, e.g. SIGTERM, SIGKILL, SIGINT (default)
-     */
-    static kill(process: any, signal?: string): Promise<void>;
-    /**
-     * Convert centineros to atomic units.
-     *
-     * @param {number} centineros - denominates an amount of XMR in centineros
-     * @return {BigInt} the amount denominated in atomic units
-     */
-    static centinerosToAtomicUnits(centineros: number): bigint;
-    /**
-     * Stringify a payment account form.
-     *
-     * @param form - form to stringify
-     * @return {string} the stringified form
-     */
-    static formToString(form: PaymentAccountForm): string;
-    /**
-     * Get a form field value.
-     *
-     * @param {PaymentAccountForm} form - form to get the field value from
-     * @param {PaymentAccountFormField.FieldId} fieldId - id of the field to get the value from
-     * @return {string} the form field value
-     */
-    static getFormValue(form: PaymentAccountForm, fieldId: PaymentAccountFormField.FieldId): string;
-    /**
-     * Set a form field value.
-     *
-     * @param {PaymentAccountFormField.FieldId} fieldId - id of the field to set the value of
-     * @param {string} value - field value to set
-     * @param {PaymentAccountForm} form - form to get the field from
-     * @return {string} the form field value
-     */
-    static setFormValue(fieldId: PaymentAccountFormField.FieldId, value: string, form: PaymentAccountForm): void;
 }
