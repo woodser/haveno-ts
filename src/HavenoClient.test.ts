@@ -176,7 +176,7 @@ const TestConfig = {
         walletSyncPeriodMs: 5000,
         maxTimePeerNoticeMs: 5000,
         maxConcurrency: 14,  // max concurrency
-        maxConcurrencyCI: 4, // CI test max concurrency
+        maxConcurrencyCI: 4, // ZI test max concurrency
         stopOnFailure: false
     }
 };
@@ -377,12 +377,12 @@ async function shutDown() {
 
 // ----------------------------------- TESTS ----------------------------------
 
-test("Can get the version (CI)", async () => {
+test("Can get the version (ZI)", async () => {
   const version = await arbitrator.getVersion();
   expect(version).toEqual(TestConfig.haveno.version);
 });
 
-test("Can manage an account (CI)", async () => {
+test("Can manage an account (ZI)", async () => {
   let user3: HavenoClient|undefined;
   let err: any;
   try {
@@ -669,7 +669,7 @@ test("Can manage Monero daemon connections (CI)", async () => {
   if (err) throw err;
 });
 
-test("Can start and stop a local Monero node (CI)", async() => {
+test("Can start and stop a local Monero node (ZI)", async() => {
 
   // expect error stopping local node
   try {
@@ -756,7 +756,7 @@ test("Can start and stop a local Monero node (CI)", async() => {
 });
 
 // test wallet balances, transactions, deposit addresses, create and relay txs
-test("Has a Monero wallet (CI)", async () => {
+test("Has a Monero wallet (ZI)", async () => {
 
   // get seed phrase
   const seed = await user1.getXmrSeed();
@@ -816,7 +816,7 @@ test("Has a Monero wallet (CI)", async () => {
   }
 });
 
-test("Can get balances (CI, sanity check)", async () => {
+test("Can get balances (ZI, sanity check)", async () => {
   const balances: XmrBalanceInfo = await user1.getBalances();
   expect(BigInt(balances.getAvailableBalance())).toBeGreaterThanOrEqual(0);
   expect(BigInt(balances.getPendingBalance())).toBeGreaterThanOrEqual(0);
@@ -824,7 +824,7 @@ test("Can get balances (CI, sanity check)", async () => {
   expect(BigInt(balances.getReservedTradeBalance())).toBeGreaterThanOrEqual(0);
 });
 
-test("Can send and receive push notifications (CI, sanity check)", async () => {
+test("Can send and receive push notifications (ZI, sanity check)", async () => {
 
   // add notification listener
   const notifications: NotificationMessage[] = [];
@@ -850,7 +850,7 @@ test("Can send and receive push notifications (CI, sanity check)", async () => {
   }
 });
 
-test("Can get supported assets and their payment methods (CI, sanity check)", async() => {
+test("Can get supported assets and their payment methods (ZI, sanity check)", async() => {
   const assetCodes = await user1.getSupportedAssetCodes(); // TODO: replace with getSupportedAssets(): TradeCurrency[]
   for (const assetCode of assetCodes) {
     const paymentMethods = await user1.getPaymentMethods(assetCode);
@@ -858,7 +858,7 @@ test("Can get supported assets and their payment methods (CI, sanity check)", as
   }
 });
 
-test("Can get market prices (CI, sanity check)", async () => {
+test("Can get market prices (ZI, sanity check)", async () => {
 
   // get all market prices
   const prices: MarketPriceInfo[] = await user1.getPrices();
@@ -891,7 +891,7 @@ test("Can get market prices (CI, sanity check)", async () => {
     .toThrow('Currency not found: INVALID_CURRENCY');
 });
 
-test("Can get market depth (CI, sanity check)", async () => {
+test("Can get market depth (ZI, sanity check)", async () => {
     const assetCode = "eth";
 
     // clear offers
@@ -960,7 +960,7 @@ test("Can get market depth (CI, sanity check)", async () => {
         .toThrow('Currency not found: INVALID_CURRENCY');
 });
 
-test("Can register as an arbitrator (CI)", async () => {
+test("Can register as an arbitrator (ZI)", async () => {
 
   // test bad dispute agent type
   try {
@@ -982,14 +982,14 @@ test("Can register as an arbitrator (CI)", async () => {
   await arbitrator.registerDisputeAgent("arbitrator", getArbitratorPrivKey(0));
 });
 
-test("Can get offers (CI)", async () => {
+test("Can get offers (ZI)", async () => {
   for (const assetCode of TestConfig.assetCodes) {
     const offers: OfferInfo[] = await user1.getOffers(assetCode);
     for (const offer of offers)  testOffer(offer);
   }
 });
 
-test("Can get my offers (CI)", async () => {
+test("Can get my offers (ZI)", async () => {
 
   // get all offers
   const offers: OfferInfo[] = await user1.getMyOffers();
@@ -1005,7 +1005,7 @@ test("Can get my offers (CI)", async () => {
   }
 });
 
-test("Can get payment methods (CI)", async () => {
+test("Can get payment methods (ZI)", async () => {
   const paymentMethods: PaymentMethod[] = await user1.getPaymentMethods();
   expect(paymentMethods.length).toBeGreaterThan(0);
   for (const paymentMethod of paymentMethods) {
@@ -1016,7 +1016,7 @@ test("Can get payment methods (CI)", async () => {
   }
 });
 
-test("Can get payment accounts (CI)", async () => {
+test("Can get payment accounts (ZI)", async () => {
   const paymentAccounts: PaymentAccount[] = await user1.getPaymentAccounts();
   for (const paymentAccount of paymentAccounts) {
     if (paymentAccount.getPaymentAccountPayload()!.getCryptoCurrencyAccountPayload()) { // TODO (woodser): test non-crypto
@@ -1027,7 +1027,7 @@ test("Can get payment accounts (CI)", async () => {
 
 // TODO: rename ClearXChange to Zelle
 // TODO: FieldId represented as number
-test("Can validate payment account forms (CI, sanity check)", async () => {
+test("Can validate payment account forms (ZI, sanity check)", async () => {
 
   // supported payment methods
   const expectedPaymentMethods = ["BLOCK_CHAINS", "REVOLUT", "SEPA", "SEPA_INSTANT", "TRANSFERWISE", "ZELLE", "SWIFT", "F2F", "STRIKE", "MONEY_GRAM", "FASTER_PAYMENTS", "UPHOLD", "PAXUM"];
@@ -1083,7 +1083,7 @@ test("Can validate payment account forms (CI, sanity check)", async () => {
   }
 });
 
-test("Can create fiat payment accounts (CI)", async () => {
+test("Can create fiat payment accounts (ZI)", async () => {
 
   // get payment account form
   const paymentMethodId = 'REVOLUT';
@@ -1114,7 +1114,7 @@ test("Can create fiat payment accounts (CI)", async () => {
   assert(found, "Payment account not found after adding");
 });
 
-test("Can create crypto payment accounts (CI)", async () => {
+test("Can create crypto payment accounts (ZI)", async () => {
 
   // test each crypto
   for (const testAccount of TestConfig.cryptoAddresses) {
@@ -1162,11 +1162,11 @@ test("Can create crypto payment accounts (CI)", async () => {
   }
 });
 
-test("Can prepare for trading (CI)", async () => {
+test("Can prepare for trading (ZI)", async () => {
   await prepareForTrading(5, user1, user2);
 });
 
-test("Can post and remove an offer (CI, sanity check)", async () => {
+test("Can post and remove an offer (ZI, sanity check)", async () => {
 
   // wait for user1 to have unlocked balance to post offer
   await waitForAvailableBalance(BigInt("250000000000") * BigInt("2"), user1);
@@ -1226,7 +1226,7 @@ test("Can post and remove an offer (CI, sanity check)", async () => {
 
 // TODO: support splitting outputs
 // TODO: provide number of confirmations in offer status
-test("Can schedule offers with locked funds (CI)", async () => {
+test("Can schedule offers with locked funds (ZI)", async () => {
   let user3: HavenoClient|undefined;
   let err: any;
   try {
@@ -1327,7 +1327,7 @@ test("Can schedule offers with locked funds (CI)", async () => {
   if (err) throw err;
 });
 
-test("Cannot post offer exceeding trade limit (CI, sanity check)", async () => {
+test("Cannot post offer exceeding trade limit (ZI, sanity check)", async () => {
   const revolutAccount = await createRevolutPaymentAccount(user1);
   try {
     await executeTrade({amount: BigInt("2100000000000"), assetCode: "USD", makerPaymentAccountId: revolutAccount.getId(), takeOffer: false});
@@ -1341,10 +1341,10 @@ test("Can complete a trade", async () => {
   await executeTrade();
 });
 
-test("Can complete trades at the same time (CI, sanity check)", async () => {
+test("Can complete trades at the same time (ZI, sanity check)", async () => {
   const ctxs = getTradeContexts(TestConfig.assetCodes.length);
   for (let i = 0; i < ctxs.length; i++) ctxs[i].assetCode = TestConfig.assetCodes[i]; // test each asset code
-  await executeTrades(ctxs, {maxConcurrency: TestConfig.trade.maxConcurrencyCI}); // cap concurrency for CI tests
+  await executeTrades(ctxs, {maxConcurrency: TestConfig.trade.maxConcurrencyCI}); // cap concurrency for ZI tests
 });
 
 test("Can complete all trade combinations (stress)", async () => {
@@ -1385,7 +1385,7 @@ test("Can complete all trade combinations (stress)", async () => {
   await executeTrades(ctxs);
 });
 
-test("Can go offline while completing a trade (CI, sanity check)", async () => {
+test("Can go offline while completing a trade (ZI, sanity check)", async () => {
   let traders: HavenoClient[] = [];
   let ctx: TradeContext = {};
   let err: any;
@@ -1420,7 +1420,7 @@ test("Can go offline while completing a trade (CI, sanity check)", async () => {
   if (err) throw err;
 });
 
-test("Can go offline while resolving disputes (CI)", async () => {
+test("Can go offline while resolving disputes (ZI)", async () => {
   let traders: HavenoClient[] = [];
   let ctx: TradeContext = {};
   let err: any;
@@ -1460,7 +1460,7 @@ test("Can go offline while resolving disputes (CI)", async () => {
   if (err) throw err;
 });
 
-test("Can resolve disputes (CI)", async () => {
+test("Can resolve disputes (ZI)", async () => {
 
   // take trades but stop before sending payment
   const ctxs = getTradeContexts(4);
@@ -1510,7 +1510,7 @@ test("Can resolve disputes (CI)", async () => {
   await executeTrades(ctxs, {concurrentTrades: true}); // TODO: running in parallel doesn't test balances before and after, but this test takes ~10 minutes in sequence. use test weight config
 });
 
-test("Cannot make or take offer with insufficient unlocked funds (CI, sanity check)", async () => {
+test("Cannot make or take offer with insufficient unlocked funds (ZI, sanity check)", async () => {
   let user3: HavenoClient|undefined;
   let err: any;
   try {
@@ -1573,7 +1573,7 @@ test("Cannot make or take offer with insufficient unlocked funds (CI, sanity che
   if (err) throw err;
 });
 
-test("Invalidates offers when reserved funds are spent (CI)", async () => {
+test("Invalidates offers when reserved funds are spent (ZI)", async () => {
   let err;
   let tx;
   try {
