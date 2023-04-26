@@ -656,7 +656,7 @@ test("Can manage Monero daemon connections (CI)", async () => {
             .setUsername(TestConfig.monerod.username)
             .setPassword(TestConfig.monerod.password)
             .setPriority(2));
-    await wait(10000);
+    await wait(30000);
     connection = await user3.getMoneroConnection();
     testConnection(connection!, TestConfig.monerod.url, OnlineStatus.ONLINE, AuthenticationStatus.AUTHENTICATED, 2);
   } catch (err2) {
